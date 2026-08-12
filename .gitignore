@@ -1,0 +1,15 @@
+node_modules
+dist
+playwright-report
+test-results
+.playwright-cli
+output
+.env
+.env.local
+.DS_Store
+*.tsbuildinfo
+
+# Original aircraft downloads are preserved locally. The optimized production
+# GLB and its attribution live in public/assets/aircraft.
+free_cessna_172sp.glb
+free_cessna_172sp/

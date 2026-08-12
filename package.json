@@ -1,0 +1,34 @@
+{
+  "name": "arcade-flight-simulator",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run src",
+    "test:watch": "vitest src",
+    "test:e2e": "playwright test",
+    "verify:preflight": "node scripts/verify-release.mjs preflight",
+    "verify:postbuild": "node scripts/verify-release.mjs postbuild",
+    "verify:release": "npm run verify:preflight && npm run test && npm run build && npm run verify:postbuild && npm run test:e2e",
+    "data:airports": "node scripts/build-airports.mjs"
+  },
+  "dependencies": {
+    "cesium": "^1.144.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^5.0.0",
+    "csv-parse": "^6.1.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.1.1",
+    "vite-plugin-static-copy": "^3.1.2",
+    "vitest": "^3.2.4"
+  }
+}
