@@ -6,13 +6,16 @@ import {
   type TerrainProvider,
   type Viewer,
 } from "cesium";
-import type { WorldQuality, WorldVisualProvider } from "./types";
+import type { DaylightState, WorldMemoryStats, WorldQuality, WorldVisualProvider } from "./types";
 
 export class GoogleWorldProvider implements WorldVisualProvider {
   readonly label = "Google photorealistic · Cesium ion";
   terrainProvider: TerrainProvider | null = null;
   private viewer: Viewer | null = null;
   private tileset: Cesium3DTileset | null = null;
+  private pendingTileRequests = 0;
+  private processingTiles = 0;
+  private removeLoadProgress: (() => void) | null = null;
 
   constructor(private readonly token: string) {}
 
@@ -33,7 +36,7 @@ export class GoogleWorldProvider implements WorldVisualProvider {
           dynamicScreenSpaceError: true,
           foveatedScreenSpaceError: true,
           cullRequestsWhileMoving: true,
-          preloadFlightDestinations: true,
+          preloadFlightDestinations: false,
           progressiveResolutionHeightFraction: 0.3,
         },
       ),
@@ -41,6 +44,12 @@ export class GoogleWorldProvider implements WorldVisualProvider {
 
     this.terrainProvider = collisionTerrain;
     this.tileset = tileset;
+    this.removeLoadProgress = tileset.loadProgress.addEventListener(
+      (pendingRequests: number, processingTiles: number) => {
+        this.pendingTileRequests = pendingRequests;
+        this.processingTiles = processingTiles;
+      },
+    );
     viewer.imageryLayers.removeAll();
     viewer.scene.globe.show = false;
     viewer.scene.primitives.add(tileset);
@@ -66,13 +75,53 @@ export class GoogleWorldProvider implements WorldVisualProvider {
     this.tileset.foveatedTimeDelay = 0.12;
   }
 
+  setDaylight(state: DaylightState): void {
+    if (!this.tileset) return;
+    this.tileset.imageBasedLighting.imageBasedLightingFactor.x = 0.32 + state.daylight * 0.55;
+    this.tileset.imageBasedLighting.imageBasedLightingFactor.y = 0.22 + state.daylight * 0.45;
+    this.tileset.environmentMapManager.brightness = 0.48 + state.daylight * 0.52;
+    this.tileset.environmentMapManager.saturation = 0.9 + state.daylight * 0.05;
+    this.tileset.environmentMapManager.atmosphereScatteringIntensity = 0.74 + state.daylight * 0.58;
+  }
+
+  isBuildingPick(picked: unknown): boolean {
+    if (!this.tileset || !picked || typeof picked !== "object") return false;
+    const result = picked as {
+      primitive?: unknown;
+      tileset?: unknown;
+      content?: { tileset?: unknown };
+    };
+    return result.primitive === this.tileset || result.tileset === this.tileset || result.content?.tileset === this.tileset;
+  }
+
+  memoryStats(): WorldMemoryStats {
+    return {
+      tileMemoryBytes: this.tileset?.totalMemoryUsageInBytes ?? null,
+      tileCacheBytes: this.tileset?.cacheBytes ?? null,
+      tileCacheOverflowBytes: this.tileset?.maximumCacheOverflowBytes ?? null,
+      pendingTileRequests: this.pendingTileRequests,
+      processingTiles: this.processingTiles,
+      terrainTileQueueLength: 0,
+      tilesLoaded: this.tileset?.tilesLoaded ?? true,
+    };
+  }
+
+  releaseUnusedResources(): void {
+    this.tileset?.trimLoadedTiles();
+    this.viewer?.scene.requestRender();
+  }
+
   destroy(): void {
-    if (this.viewer && this.tileset && !this.tileset.isDestroyed()) {
+    this.removeLoadProgress?.();
+    this.removeLoadProgress = null;
+    if (this.viewer && !this.viewer.isDestroyed() && this.tileset && !this.tileset.isDestroyed()) {
       this.viewer.scene.primitives.remove(this.tileset);
       this.viewer.scene.globe.show = true;
     }
     this.tileset = null;
     this.viewer = null;
     this.terrainProvider = null;
+    this.pendingTileRequests = 0;
+    this.processingTiles = 0;
   }
 }

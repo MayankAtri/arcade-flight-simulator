@@ -5,7 +5,7 @@ import {
   type TerrainProvider,
   type Viewer,
 } from "cesium";
-import type { WorldQuality, WorldVisualProvider } from "./types";
+import type { DaylightState, WorldMemoryStats, WorldQuality, WorldVisualProvider } from "./types";
 
 export class BasicWorldProvider implements WorldVisualProvider {
   readonly label = "Basic world";
@@ -32,6 +32,26 @@ export class BasicWorldProvider implements WorldVisualProvider {
     this.viewer.resolutionScale = level === "low" ? 0.75 : level === "medium" ? 0.9 : 1;
     this.viewer.scene.globe.maximumScreenSpaceError = level === "low" ? 4 : level === "medium" ? 2 : 1.25;
   }
+
+  setDaylight(_state: DaylightState): void {}
+
+  isBuildingPick(_picked: unknown): boolean {
+    return false;
+  }
+
+  memoryStats(): WorldMemoryStats {
+    return {
+      tileMemoryBytes: null,
+      tileCacheBytes: null,
+      tileCacheOverflowBytes: null,
+      pendingTileRequests: 0,
+      processingTiles: 0,
+      terrainTileQueueLength: 0,
+      tilesLoaded: true,
+    };
+  }
+
+  releaseUnusedResources(): void {}
 
   destroy(): void {
     this.viewer = null;

@@ -10,13 +10,19 @@
     "test": "vitest run src",
     "test:watch": "vitest src",
     "test:e2e": "playwright test",
+    "test:memory": "RUN_MEMORY_SOAK=1 playwright test tests/e2e/memory-soak.spec.ts",
+    "test:memory:chrome": "node scripts/run-chrome-memory-check.mjs",
     "verify:preflight": "node scripts/verify-release.mjs preflight",
     "verify:postbuild": "node scripts/verify-release.mjs postbuild",
     "verify:release": "npm run verify:preflight && npm run test && npm run build && npm run verify:postbuild && npm run test:e2e",
     "data:airports": "node scripts/build-airports.mjs"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/rajdhani": "^5.3.0",
     "cesium": "^1.144.0",
+    "lucide-react": "^1.31.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

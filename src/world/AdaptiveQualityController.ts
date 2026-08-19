@@ -6,6 +6,8 @@ const DOWNGRADE_SECONDS = 4;
 const UPGRADE_SECONDS = 10;
 const CHANGE_COOLDOWN_SECONDS = 8;
 
+const QUALITY_RANK: Record<WorldQuality, number> = { low: 0, medium: 1, high: 2 };
+
 const LOWER_QUALITY: Record<WorldQuality, WorldQuality> = {
   high: "medium",
   medium: "low",
@@ -23,7 +25,10 @@ export class AdaptiveQualityController {
   private highFpsSeconds = 0;
   private cooldownSeconds = 0;
 
-  constructor(private quality: WorldQuality = "medium") {}
+  constructor(
+    private quality: WorldQuality = "medium",
+    private readonly maximumAutomaticQuality: WorldQuality = "high",
+  ) {}
 
   current(): WorldQuality {
     return this.quality;
@@ -37,7 +42,7 @@ export class AdaptiveQualityController {
   }
 
   observe(fps: number, elapsedSeconds: number): WorldQuality | null {
-    if (!Number.isFinite(fps) || elapsedSeconds <= 0) return null;
+    if (!Number.isFinite(fps) || !Number.isFinite(elapsedSeconds) || elapsedSeconds <= 0) return null;
     if (this.cooldownSeconds > 0) {
       this.cooldownSeconds = Math.max(0, this.cooldownSeconds - elapsedSeconds);
       this.lowFpsSeconds = 0;
@@ -63,7 +68,10 @@ export class AdaptiveQualityController {
     }
 
     if (this.highFpsSeconds >= UPGRADE_SECONDS) {
-      const next = HIGHER_QUALITY[this.quality];
+      const candidate = HIGHER_QUALITY[this.quality];
+      const next = QUALITY_RANK[candidate] > QUALITY_RANK[this.maximumAutomaticQuality]
+        ? this.maximumAutomaticQuality
+        : candidate;
       this.highFpsSeconds = 0;
       if (next !== this.quality) return this.changeTo(next);
     }

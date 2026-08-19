@@ -1,6 +1,6 @@
 import { Cartographic, sampleTerrainMostDetailed, type TerrainProvider } from "cesium";
 import { radiansToDegrees, type GeodeticPosition } from "../flight/coordinates";
-import type { TerrainSample, TerrainSampler } from "./types";
+import type { TerrainMemoryStats, TerrainSample, TerrainSampler } from "./types";
 
 const CACHE_PRECISION = 4;
 const MAX_CACHE_ENTRIES = 1_200;
@@ -12,10 +12,12 @@ export class TerrainSamplingSystem implements TerrainSampler {
   private pending = false;
   private lastRequestTime = 0;
   private generation = 0;
+  private destroyed = false;
 
-  constructor(private readonly provider: TerrainProvider | null) {}
+  constructor(private provider: TerrainProvider | null) {}
 
   reset(fallbackHeight: number, position?: GeodeticPosition): void {
+    if (this.destroyed) return;
     this.generation += 1;
     this.latest = (position && this.cache.get(this.cacheKey(position))) ?? {
       height: fallbackHeight,
@@ -30,7 +32,15 @@ export class TerrainSamplingSystem implements TerrainSampler {
     return this.latest;
   }
 
+  memoryStats(): TerrainMemoryStats {
+    return {
+      cachedSamples: this.cache.size,
+      inFlightRequests: this.inFlight.size,
+    };
+  }
+
   update(position: GeodeticPosition, now: number): void {
+    if (this.destroyed) return;
     if (this.pending || now - this.lastRequestTime < 220) return;
     this.lastRequestTime = now;
     const key = this.cacheKey(position);
@@ -51,6 +61,7 @@ export class TerrainSamplingSystem implements TerrainSampler {
   }
 
   async sampleHeight(position: GeodeticPosition): Promise<TerrainSample> {
+    if (this.destroyed) return { ...this.latest, reliable: false, sampledAt: performance.now() };
     const key = this.cacheKey(position);
     const cached = this.cache.get(key);
     if (cached) {
@@ -65,6 +76,7 @@ export class TerrainSamplingSystem implements TerrainSampler {
       this.remember(key, fallback);
       return fallback;
     }
+    const generation = this.generation;
     const request = sampleTerrainMostDetailed(this.provider, [
       new Cartographic(position.longitude, position.latitude, position.height),
     ])
@@ -74,7 +86,7 @@ export class TerrainSamplingSystem implements TerrainSampler {
           reliable: Number.isFinite(sampled.height),
           sampledAt: performance.now(),
         };
-        this.remember(key, result);
+        if (!this.destroyed && generation === this.generation) this.remember(key, result);
         return result;
       })
       .catch(() => ({ ...this.latest, reliable: false, sampledAt: performance.now() }))
@@ -84,9 +96,21 @@ export class TerrainSamplingSystem implements TerrainSampler {
   }
 
   prefetch(path: readonly GeodeticPosition[]): void {
+    if (this.destroyed) return;
     for (const position of path.slice(0, 3)) {
       if (!this.cache.has(this.cacheKey(position))) void this.sampleHeight(position);
     }
+  }
+
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.generation += 1;
+    this.cache.clear();
+    this.inFlight.clear();
+    this.pending = false;
+    this.lastRequestTime = 0;
+    this.provider = null;
   }
 
   private cacheKey(position: GeodeticPosition): string {

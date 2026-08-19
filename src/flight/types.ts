@@ -24,6 +24,7 @@ export type FlightControls = {
 export type FlightEnvironment = {
   groundHeight: number;
   terrainReliable: boolean;
+  obstacleHeight?: number;
 };
 
 export type FlightTelemetry = {
@@ -37,6 +38,7 @@ export type FlightTelemetry = {
   flaps: number;
   grounded: boolean;
   crashed: boolean;
+  crashReason: "" | "terrain" | "building";
   landingStatus: "" | "smooth" | "hard" | "severe" | "crashed";
 };
 

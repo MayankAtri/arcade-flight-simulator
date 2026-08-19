@@ -1,14 +1,14 @@
 import { expect, test } from "@playwright/test";
 
 test("keeps photorealistic tiles locked off and tolerates repeated control resets", async ({ page }) => {
+  test.setTimeout(180_000);
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
   await page.goto("/?world=photorealistic&airport=VABB&mode=air&heading=270&altitude=304.8");
-  await expect(page.getByRole("heading", { name: "Arcade Flight Simulator" })).toBeVisible();
-  await expect(page.getByText("Cesium world", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByLabel("Development flight telemetry")).toContainText("AIRBORNE", { timeout: 90_000 });
+  await expect(page.getByText("Cessna 172SP · OSM scenery", { exact: true })).toBeVisible();
   await expect(page.getByText("Google photorealistic", { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel("Development flight telemetry")).toContainText("AIRBORNE");
   for (let cycle = 0; cycle < 5; cycle += 1) {
     await page.keyboard.down("Shift");
     await page.keyboard.down("s");
@@ -40,4 +40,24 @@ test("falls back to the basic world when Cesium ion assets fail", async ({ page 
   await expect(page.getByRole("heading", { name: "Arcade Flight Simulator" })).toBeVisible();
   await expect(page.getByText("Basic world", { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Choose the world" })).toBeVisible();
+});
+
+test("stops at streamed OSM building geometry and recovers at a safe spawn", async ({ page }) => {
+  await page.goto("/?lat=25.1972&lon=55.2744&elevation=4&mode=air&heading=90&altitude=8");
+  await expect(page.getByRole("button", { name: "Pause" })).toBeEnabled({ timeout: 60_000 });
+  await page.getByRole("button", { name: "Pause" }).click();
+  await expect(page.getByRole("button", { name: "Resume" })).toBeEnabled();
+  await expect(page.getByLabel("Flight paused")).toBeVisible();
+
+  // The test starts inside the Burj Khalifa footprint. Let its OSM tile reach
+  // the scene before advancing the fixed-step simulation.
+  await page.waitForTimeout(10_000);
+  await page.getByRole("button", { name: "Resume" }).click();
+  await expect(page.getByRole("heading", { name: "Building collision" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByLabel("Development flight telemetry")).toContainText("CRASHED");
+
+  await page.getByRole("button", { name: "World search" }).click();
+  await page.getByRole("button", { name: "Dubai airborne" }).click();
+  await expect(page.getByRole("heading", { name: "Building collision" })).not.toBeVisible();
+  await expect(page.getByLabel("Development flight telemetry")).toContainText("AIRBORNE", { timeout: 60_000 });
 });

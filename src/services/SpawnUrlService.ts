@@ -49,6 +49,9 @@ export const parseSpawnUrl = (search: string, airportLookup: (code: string) => A
 
 export const updateSpawnUrl = (request: SpawnRequest, airportCode?: string): void => {
   const params = new URLSearchParams();
+  if (new URLSearchParams(location.search).get("world") === "photorealistic") {
+    params.set("world", "photorealistic");
+  }
   if (airportCode) params.set("airport", airportCode);
   else {
     params.set("lat", request.latitudeDegrees.toFixed(5));
