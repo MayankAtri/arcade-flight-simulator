@@ -12,16 +12,21 @@ export type FlightAudioMix = {
   masterGain: number;
 };
 
-export const flightAudioMix = (telemetry: AudioFlightState, paused: boolean, cameraMode: CameraMode): FlightAudioMix => {
+export const flightAudioMix = (
+  telemetry: AudioFlightState,
+  paused: boolean,
+  cameraMode: CameraMode,
+  flightActive: boolean,
+): FlightAudioMix => {
   const speed = clamp(telemetry.airspeedMetersPerSecond, 0, 95);
-  const running = telemetry.crashed ? 0 : 1;
+  const running = telemetry.crashed || !flightActive ? 0 : 1;
   const cockpit = cameraMode === "cockpit";
   return {
     engineFrequency: 38 + telemetry.throttle * 74 + speed * 0.12,
     engineGain: running * (0.055 + telemetry.throttle * 0.085) * (cockpit ? 1.08 : 0.92),
     windGain: running * Math.pow(speed / 95, 1.55) * (cockpit ? 0.09 : 0.17),
     groundGain: running * Number(telemetry.grounded) * clamp(speed / 32, 0, 1) * 0.16,
-    masterGain: paused ? 0.16 : 0.72,
+    masterGain: flightActive ? (paused ? 0.16 : 0.72) : 0,
   };
 };
 
@@ -36,6 +41,7 @@ export class AudioSystem {
   private groundGain: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private enabled = true;
+  private flightActive = false;
   private previousGrounded = false;
   private previousCrashed = false;
 
@@ -52,8 +58,20 @@ export class AudioSystem {
     if (!this.context || !this.master) return;
     const now = this.context.currentTime;
     this.master.gain.cancelScheduledValues(now);
-    this.master.gain.setTargetAtTime(enabled ? 0.72 : 0, now, 0.035);
-    if (enabled && this.context.state === "suspended") void this.context.resume();
+    if (!enabled || !this.flightActive) this.master.gain.setTargetAtTime(0, now, 0.035);
+    if (enabled && this.flightActive && this.context.state === "suspended") void this.context.resume();
+  }
+
+  setFlightActive(active: boolean): void {
+    this.flightActive = active;
+    if (!this.context || !this.master) return;
+    if (!active) {
+      const now = this.context.currentTime;
+      this.master.gain.cancelScheduledValues(now);
+      this.master.gain.setTargetAtTime(0, now, 0.025);
+    } else if (this.enabled && this.context.state === "suspended") {
+      void this.context.resume();
+    }
   }
 
   update(telemetry: FlightTelemetry, paused: boolean, cameraMode: CameraMode): void {
@@ -64,7 +82,7 @@ export class AudioSystem {
     }
 
     const now = this.context.currentTime;
-    const mix = flightAudioMix(telemetry, paused, cameraMode);
+    const mix = flightAudioMix(telemetry, paused, cameraMode, this.flightActive);
     this.setSmooth(this.master.gain, mix.masterGain, now, 0.08);
     this.setSmooth(this.engineFundamental?.frequency, mix.engineFrequency, now, 0.045);
     this.setSmooth(this.engineHarmonic?.frequency, mix.engineFrequency * 2.02, now, 0.045);
@@ -73,8 +91,8 @@ export class AudioSystem {
     this.setSmooth(this.windGain?.gain, mix.windGain, now, 0.11);
     this.setSmooth(this.groundGain?.gain, mix.groundGain, now, 0.045);
 
-    if (!this.previousCrashed && telemetry.crashed) this.playImpact(1);
-    else if (!this.previousGrounded && telemetry.grounded) {
+    if (this.flightActive && !this.previousCrashed && telemetry.crashed) this.playImpact(1);
+    else if (this.flightActive && !this.previousGrounded && telemetry.grounded) {
       const strength = telemetry.landingStatus === "severe" ? 0.78 : telemetry.landingStatus === "hard" ? 0.5 : 0.28;
       this.playImpact(strength);
     }

@@ -351,6 +351,7 @@ export class SimulationEngine {
   enterExploreMode(): void {
     if (!this.viewer) return;
     this.viewContext = "explore";
+    this.audio.setFlightActive(false);
     this.setPaused(true);
     this.aircraft.setVisible(false);
     this.viewer.camera.cancelFlight();
@@ -373,6 +374,7 @@ export class SimulationEngine {
       request,
     );
     this.viewContext = "transition";
+    this.audio.setFlightActive(false);
     this.setPaused(true);
     this.aircraft.setVisible(false);
     this.clearAirportMarkers();
@@ -416,6 +418,7 @@ export class SimulationEngine {
   enterFlightMode(resume = true): void {
     if (!this.viewer) return;
     this.viewContext = "flight";
+    this.audio.setFlightActive(true);
     this.aircraft.setVisible(true);
     this.camera.reset();
     this.camera.update(
