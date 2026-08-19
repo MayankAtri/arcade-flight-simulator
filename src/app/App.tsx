@@ -1,11 +1,12 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   Camera,
-  ChevronDown,
   CircleCheck,
   Compass,
   Flag,
   Gauge,
+  Heart,
+  Link2,
   LoaderCircle,
   MapPinned,
   Menu,
@@ -16,6 +17,7 @@ import {
   Search,
   Settings,
   SlidersHorizontal,
+  Star,
   Sun,
   Volume2,
   VolumeX,
@@ -36,7 +38,6 @@ import { searchCities, type GeocodingResult } from "../services/GeocodingService
 import { parseSpawnUrl, spawnFromAirport, updateSpawnUrl } from "../services/SpawnUrlService";
 import {
   DEFAULT_AIRBORNE_SPAWN,
-  DEFAULT_RUNWAY_SPAWN,
   SimulationEngine,
   type EngineStatus,
   type RuntimeTelemetry,
@@ -44,6 +45,7 @@ import {
 import { cameraModeLabel, nextCameraMode } from "../systems/CameraSystem";
 import { ChallengesPanel } from "./ChallengesPanel";
 import { ControlsPanel } from "./ControlsPanel";
+import { formatNonNegativeFeet } from "./telemetryFormatting";
 
 const EMPTY_TELEMETRY: RuntimeTelemetry = {
   latitudeDegrees: DEFAULT_AIRBORNE_SPAWN.latitudeDegrees,
@@ -75,7 +77,6 @@ const EMPTY_TELEMETRY: RuntimeTelemetry = {
 };
 
 const metersPerSecondToKnots = (value: number): number => value * 1.94384;
-const metersToFeet = (value: number): number => value * 3.28084;
 const metersPerSecondToFeetPerMinute = (value: number): number => value * 196.85;
 
 const formatDaylightTime = (decimalHour: number): string => {
@@ -92,8 +93,24 @@ type FlightTransition = {
 
 type SetupView = "explore" | "challenges";
 
+type SelectedPlace =
+  | { kind: "airport"; airport: Airport; label: string; secondary: string }
+  | { kind: "city"; city: GeocodingResult; label: string; secondary: string };
+
+const POPULAR_DESTINATIONS = [
+  { id: "helsinki", label: "Helsinki", country: "Finland", latitude: 60.1699, longitude: 24.9384, visits: "5,303" },
+  { id: "matterhorn", label: "Matterhorn", country: "Switzerland", latitude: 45.9763, longitude: 7.6586, visits: "451" },
+  { id: "lisbon", label: "Lisbon", country: "Portugal", latitude: 38.7223, longitude: -9.1393, visits: "435" },
+  { id: "new-york", label: "New York", country: "United States", latitude: 40.7128, longitude: -74.006, visits: "381" },
+  { id: "paris", label: "Paris", country: "France", latitude: 48.8566, longitude: 2.3522, visits: "138" },
+  { id: "tehran", label: "Tehran", country: "Iran", latitude: 35.6892, longitude: 51.389, visits: "130" },
+  { id: "dubai", label: "Dubai", country: "United Arab Emirates", latitude: 25.2048, longitude: 55.2708, visits: "60" },
+  { id: "monaco", label: "Monaco", country: "Monaco", latitude: 43.7384, longitude: 7.4246, visits: "43" },
+] satisfies Array<GeocodingResult & { country: string; visits: string }>;
+
 function App() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const setupScrollRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<SimulationEngine | null>(null);
   const [status, setStatus] = useState<EngineStatus>({ phase: "loading", message: "Loading flight systems…" });
   const [telemetry, setTelemetry] = useState<RuntimeTelemetry>(EMPTY_TELEMETRY);
@@ -107,6 +124,12 @@ function App() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [shareStatus, setShareStatus] = useState("");
+  const [selectedPlace, setSelectedPlace] = useState<SelectedPlace | null>(null);
+  const [setupHour, setSetupHour] = useState(12);
+  const [fuelPercent, setFuelPercent] = useState(50);
+  const [placeSaved, setPlaceSaved] = useState(false);
+  const [showPromo, setShowPromo] = useState(true);
+  const [destinationView, setDestinationView] = useState<"popular" | "favorites">("popular");
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showControls, setShowControls] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -311,21 +334,46 @@ function App() {
 
   const selectAirport = (airport: Airport) => {
     clearActiveChallenge();
-    const spawn = spawnFromAirport(airport, spawnMode);
-    void startFlight(spawn, `${airport.name} · ${airport.runway}`, airport.ident);
+    setSelectedPlace({
+      kind: "airport",
+      airport,
+      label: airport.name,
+      secondary: `${airport.municipality || airport.country} · ${airport.iata || airport.ident} · RWY ${airport.runway}`,
+    });
+    setPlaceSaved(false);
+    setShareStatus("");
+    engineRef.current?.showAirportMarkers([airport]);
+    window.requestAnimationFrame(() => {
+      if (setupScrollRef.current) setupScrollRef.current.scrollTop = 0;
+    });
   };
 
   const selectCity = (city: GeocodingResult) => {
     clearActiveChallenge();
-    const spawn: SpawnRequest = {
-      latitudeDegrees: city.latitude,
-      longitudeDegrees: city.longitude,
-      elevationMeters: 0,
-      headingDegrees: 0,
-      mode: "air",
-      airborneAltitudeMeters: FLIGHT_TUNING.defaultAirborneSpawnAltitudeMeters,
-    };
-    void startFlight(spawn, city.label);
+    const [label, ...locationParts] = city.label.split(",");
+    setSelectedPlace({
+      kind: "city",
+      city,
+      label: label.trim(),
+      secondary: locationParts.join(",").trim() || `${city.latitude.toFixed(4)}, ${city.longitude.toFixed(4)}`,
+    });
+    setSpawnMode("air");
+    setPlaceSaved(false);
+    setShareStatus("");
+    engineRef.current?.clearAirportMarkers();
+    window.requestAnimationFrame(() => {
+      if (setupScrollRef.current) setupScrollRef.current.scrollTop = 0;
+    });
+  };
+
+  const selectPopularDestination = (destination: (typeof POPULAR_DESTINATIONS)[number]) => {
+    setQuery(destination.label);
+    selectCity({
+      id: destination.id,
+      label: `${destination.label}, ${destination.country}`,
+      latitude: destination.latitude,
+      longitude: destination.longitude,
+    });
   };
 
   const chooseSearchKind = (kind: "airport" | "city") => {
@@ -347,9 +395,51 @@ function App() {
     }
   };
 
+  const selectedSpawn = (): { spawn: SpawnRequest; airportCode?: string } | null => {
+    if (!selectedPlace) return null;
+    if (selectedPlace.kind === "airport") {
+      return {
+        spawn: spawnFromAirport(selectedPlace.airport, spawnMode),
+        airportCode: selectedPlace.airport.ident,
+      };
+    }
+    return {
+      spawn: {
+        latitudeDegrees: selectedPlace.city.latitude,
+        longitudeDegrees: selectedPlace.city.longitude,
+        elevationMeters: 0,
+        headingDegrees: 0,
+        mode: "air",
+        airborneAltitudeMeters: FLIGHT_TUNING.defaultAirborneSpawnAltitudeMeters,
+      },
+    };
+  };
+
+  const takeOffFromSelectedPlace = async () => {
+    const selection = selectedSpawn();
+    if (!selection || !selectedPlace) return;
+    clearActiveChallenge();
+    engineRef.current?.setDaylightHour(setupHour);
+    await startFlight(selection.spawn, selectedPlace.label, selection.airportCode);
+  };
+
+  const copySelectedPlaceLink = async () => {
+    const selection = selectedSpawn();
+    if (!selection) return;
+    updateSpawnUrl(selection.spawn, selection.airportCode);
+    await copyShareLink();
+  };
+
+  const clearSelectedPlace = () => {
+    setSelectedPlace(null);
+    setPlaceSaved(false);
+    setShareStatus("");
+    engineRef.current?.clearAirportMarkers();
+  };
+
   const speedKnots = Math.round(metersPerSecondToKnots(telemetry.airspeedMetersPerSecond));
-  const altitudeAglFeet = Math.round(metersToFeet(telemetry.altitudeAglMeters));
-  const altitudeMslFeet = Math.round(metersToFeet(telemetry.altitudeMslMeters));
+  const altitudeAglFeet = formatNonNegativeFeet(telemetry.altitudeAglMeters);
+  const altitudeMslFeet = formatNonNegativeFeet(telemetry.altitudeMslMeters);
   const verticalSpeed = Math.round(metersPerSecondToFeetPerMinute(telemetry.verticalSpeedMetersPerSecond));
   const flightStateLabel = telemetry.crashed ? "Crashed" : telemetry.grounded ? "Ground" : "Airborne";
   const headingLabel = Math.round(telemetry.headingDegrees).toString().padStart(3, "0");
@@ -506,19 +596,18 @@ function App() {
       )}
 
       {showBriefing && status.phase === "ready" && (
-        <section className={`setup-layer${flightTransition.phase !== "idle" ? " setup-layer--transitioning" : ""}`} aria-label="World search and flight controls">
+        <section className={`setup-layer${flightTransition.phase !== "idle" ? " setup-layer--transitioning" : ""}${showPromo && setupView === "explore" ? " setup-layer--promo" : ""}`} aria-label="World search and flight controls">
           <header className="setup-nav">
             <div className="setup-brand">
-              <Plane size={34} aria-hidden="true" />
-              <div><h1>Arcade Flight Simulator</h1><span>{telemetry.worldLabel}</span></div>
+              <img className="setup-brand__mark" src="https://worldflightsim.com/assets/brand/wfs-mark-white.png" alt="WFS" />
+              <div><h1>World Flight Sim</h1><span>{telemetry.worldLabel}</span></div>
             </div>
             <div className="setup-primary-nav">
               <button type="button" className={setupView === "explore" ? "is-active" : ""} onClick={() => setSetupView("explore")}>Explore</button>
+              <span>Flight school</span>
               <button type="button" className={setupView === "challenges" ? "is-active" : ""} onClick={() => setSetupView("challenges")}>Challenges</button>
               <span>Ring runs</span>
               <span>Career</span>
-              <span>Hangar</span>
-              <span>Gallery</span>
             </div>
             <nav aria-label="Setup actions">
               <button type="button" onClick={toggleSound} aria-label={`Sound ${soundEnabled ? "on" : "off"}`} aria-pressed={soundEnabled}>
@@ -529,16 +618,25 @@ function App() {
             </nav>
           </header>
 
+          {showPromo && setupView === "explore" && (
+            <aside className="setup-promo" aria-label="New aircraft announcement">
+              <span>New aircraft</span>
+              <strong>Premium aircraft are available in the Shop</strong>
+              <button type="button">View shop</button>
+              <button type="button" className="setup-promo__close" onClick={() => setShowPromo(false)} aria-label="Dismiss announcement"><X size={16} aria-hidden="true" /></button>
+            </aside>
+          )}
+
           {setupView === "explore" ? (
-          <div className="setup-scroll">
+          <div ref={setupScrollRef} className={`setup-scroll${selectedPlace ? " setup-scroll--place-selected" : ""}`}>
             <section className="setup-intro">
               <span>Explore</span>
               <h2 aria-label="Choose the world">Fly <em>anywhere</em> on Earth</h2>
-              <p>Search any airport, city, or code, then take off from the runway or begin at 1,000 ft AGL.</p>
+              <p>Type any airport, city, or landmark in the world, then choose your start and take off from there.</p>
               <button type="button" onClick={() => setShowControls(true)}><SlidersHorizontal size={15} aria-hidden="true" /> Controls</button>
             </section>
 
-            <div className="setup-grid">
+            <div className={`setup-grid${selectedPlace ? " setup-grid--selected" : ""}`}>
               <aside className="aircraft-card" aria-label="Active aircraft">
                 <div className="aircraft-card__stage">
                   <img src="/assets/aircraft/cessna-172sp-preview.png" alt="Cessna 172SP aircraft preview" />
@@ -552,66 +650,154 @@ function App() {
                     <div><dt>Stall</dt><dd>48 <small>kt</small></dd></div>
                     <div><dt>Ceiling</dt><dd>14,000 <small>ft</small></dd></div>
                   </dl>
+                  <button type="button" className="aircraft-card__details">View details</button>
                 </div>
               </aside>
 
               <section className="flight-setup">
-                <form className="location-search" onSubmit={(event) => void submitSearch(event)}>
-                  <Search size={18} aria-hidden="true" />
-                  <label className="sr-only" htmlFor="world-query">{searchKind === "airport" ? "Airport name, ICAO, or IATA" : "City name"}</label>
-                  <input id="world-query" value={query} onChange={(event) => setQuery(event.target.value)} autoComplete="off" placeholder={searchKind === "airport" ? "Search airport, ICAO, or IATA…" : "Search any city…"} />
-                  <button type="submit" disabled={searching}>{searching ? "Searching…" : "Search"}</button>
-                </form>
+                <div className="location-search-stack">
+                  <form className="location-search" onSubmit={(event) => void submitSearch(event)}>
+                    <Search size={18} aria-hidden="true" />
+                    <label className="sr-only" htmlFor="world-query">{searchKind === "airport" ? "Airport name, ICAO, or IATA" : "City name"}</label>
+                    <input
+                      id="world-query"
+                      value={query}
+                      onChange={(event) => {
+                        setQuery(event.target.value);
+                        if (selectedPlace) clearSelectedPlace();
+                      }}
+                      autoComplete="off"
+                      aria-expanded={!selectedPlace && Boolean(searchError || airportResults.length || cityResults.length)}
+                      placeholder={searchKind === "airport" ? "Search airport, ICAO, or IATA…" : "Search any city…"}
+                    />
+                    <button type="submit" aria-label="Search" disabled={searching}><kbd>{searching ? "…" : "⌘K"}</kbd></button>
+                  </form>
 
-                <div className="flight-setup__card">
-                  <div className="flight-setup__heading">
-                    <div><span>Flight setup</span><strong>{formatDaylightTime(telemetry.daylight.localHour)} · {spawnMode === "runway" ? "Runway" : "Air start"}</strong></div>
-                    <ChevronDown size={18} aria-hidden="true" />
-                  </div>
-
-                  <span className="field-label">Start mode</span>
-                  <div className="spawn-mode" aria-label="Airport spawn mode">
-                    <button type="button" aria-pressed={spawnMode === "runway"} onClick={() => setSpawnMode("runway")}><strong>RWY</strong><span>Runway</span></button>
-                    <button type="button" aria-pressed={spawnMode === "air"} onClick={() => setSpawnMode("air")}><strong>AIR</strong><span>Airborne</span></button>
-                  </div>
-
-                  <div className="quick-starts">
-                    <button type="button" onClick={() => { clearActiveChallenge(); void startFlight(DEFAULT_RUNWAY_SPAWN, "Dubai International · 12R", "OMDB"); }} disabled={searching}>Dubai runway</button>
-                    <button type="button" className="takeoff-button" onClick={() => { clearActiveChallenge(); void startFlight(DEFAULT_AIRBORNE_SPAWN, "Dubai International · airborne", "OMDB"); }} disabled={searching}><Plane size={17} aria-hidden="true" /> Dubai airborne</button>
-                  </div>
-
-                  <div className="share-row">
-                    <button type="button" onClick={() => void copyShareLink()}><MapPinned size={14} aria-hidden="true" /> Copy current spawn link</button>
-                    <span aria-live="polite">{shareStatus}</span>
-                  </div>
+                  {!selectedPlace && (
+                    <section className="search-dropdown" aria-label="Location search results">
+                      <header>
+                        <span>Search results</span>
+                        <small>{airportResults.length || cityResults.length} shown</small>
+                      </header>
+                      <div className="search-tabs" role="tablist" aria-label="Location search type">
+                        <button type="button" role="tab" aria-selected={searchKind === "airport"} onClick={() => chooseSearchKind("airport")}><Gauge size={13} aria-hidden="true" /> Airports</button>
+                        <button type="button" role="tab" aria-selected={searchKind === "city"} onClick={() => chooseSearchKind("city")}><MapPinned size={13} aria-hidden="true" /> Cities</button>
+                      </div>
+                      {searchError && <p className="search-error" role="alert">{searchError}</p>}
+                      <div className="search-results">
+                        {searchKind === "airport" && airportResults.map((airport, index) => (
+                          <button type="button" key={airport.ident} onClick={() => selectAirport(airport)} disabled={searching}>
+                            <span className="result-rank">{index + 1}</span>
+                            <strong>{airport.iata || airport.ident}</strong>
+                            <span>{airport.name}</span>
+                            <small>{airport.municipality || airport.country} · RWY {airport.runway} · {Math.round(airport.lengthFeet).toLocaleString()} ft</small>
+                          </button>
+                        ))}
+                        {searchKind === "city" && cityResults.map((city) => (
+                          <button type="button" className="search-result--city" key={city.id} onClick={() => selectCity(city)} disabled={searching}>
+                            <MapPinned className="search-result__pin" size={19} aria-hidden="true" />
+                            <strong>{city.label.split(",")[0]}</strong>
+                            <span>{city.label.split(",").slice(1).join(",").trim() || city.label}</span>
+                            <small>{city.latitude.toFixed(4)}, {city.longitude.toFixed(4)} · airborne</small>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  )}
                 </div>
+
+                {selectedPlace && (
+                  <section className="selected-flight-setup" aria-label={`Flight setup for ${selectedPlace.label}`}>
+                    <header className="selected-flight-setup__header">
+                      <div>
+                        <span>Flight setup</span>
+                        <strong>{selectedPlace.label}</strong>
+                        <small>{selectedPlace.secondary}</small>
+                      </div>
+                      <div>
+                        <span>{formatDaylightTime(setupHour)} · Clear · {spawnMode === "runway" ? "Runway start" : "Air start"}</span>
+                        <button type="button" onClick={clearSelectedPlace} aria-label="Clear selected place"><X size={20} aria-hidden="true" /></button>
+                      </div>
+                    </header>
+
+                    <div className="selected-flight-setup__controls">
+                      <section>
+                        <span className="field-label">Start mode</span>
+                        <div className="spawn-mode spawn-mode--expanded" aria-label="Airport spawn mode">
+                          <button type="button" aria-pressed={spawnMode === "air"} onClick={() => setSpawnMode("air")}><strong>AIR</strong><span>Airborne</span></button>
+                          <button type="button" aria-pressed={spawnMode === "runway"} onClick={() => setSpawnMode("runway")} disabled={selectedPlace.kind === "city"}><strong>RWY</strong><span>Runway</span></button>
+                          <button type="button" disabled title="Taxi starts are not available yet"><strong>TAXI</strong><span>Parking</span></button>
+                          <button type="button" disabled title="Approach starts are not available yet"><strong>APP</strong><span>Final</span></button>
+                        </div>
+                      </section>
+
+                      <section className="setup-option-card">
+                        <label htmlFor="setup-time">Time of day</label>
+                        <select id="setup-time" value={setupHour} onChange={(event) => {
+                          const hour = Number(event.target.value);
+                          setSetupHour(hour);
+                          engineRef.current?.setDaylightHour(hour);
+                        }}>
+                          <option value={6}>06:00</option>
+                          <option value={9}>09:00</option>
+                          <option value={12}>12:00</option>
+                          <option value={15}>15:00</option>
+                          <option value={17.5}>17:30</option>
+                        </select>
+                      </section>
+
+                      <section className="setup-option-card setup-option-card--weather">
+                        <span>Weather</span>
+                        <div>
+                          <button type="button" aria-pressed="true">Clear</button>
+                          <button type="button" disabled title="Weather presets are not available yet">Scattered</button>
+                          <button type="button" disabled title="Weather presets are not available yet">Cloudy</button>
+                        </div>
+                      </section>
+                    </div>
+
+                    <section className="fuel-control">
+                      <div><span>Fuel assigned</span><strong>{Math.round(fuelPercent * 0.56)} gal</strong></div>
+                      <output htmlFor="fuel-assigned">{fuelPercent}% tank · approximately {Math.round(fuelPercent * 0.56)} gal reserve</output>
+                      <input id="fuel-assigned" type="range" min="20" max="100" value={fuelPercent} onChange={(event) => setFuelPercent(Number(event.target.value))} />
+                    </section>
+
+                    <footer className="selected-flight-setup__actions">
+                      <button type="button" className="selected-takeoff-button" onClick={() => void takeOffFromSelectedPlace()} disabled={searching}><Plane size={20} aria-hidden="true" /> Take off</button>
+                      <button type="button" aria-pressed={placeSaved} onClick={() => setPlaceSaved((saved) => !saved)}><Heart size={19} aria-hidden="true" fill={placeSaved ? "currentColor" : "none"} /> {placeSaved ? "Saved" : "Save"}</button>
+                      <button type="button" onClick={() => void copySelectedPlaceLink()}><Link2 size={18} aria-hidden="true" /> Share this spot</button>
+                    </footer>
+                    <p className="selected-flight-setup__status" aria-live="polite">{shareStatus || "Choose your start, then take off from this exact spot."}</p>
+                  </section>
+                )}
               </section>
 
-              <aside className="destinations-panel">
-                <header><div><Compass size={17} aria-hidden="true" /><span>Destinations</span></div><small>{airportResults.length || cityResults.length} shown</small></header>
-                <div className="search-tabs" role="tablist" aria-label="Location search type">
-                  <button type="button" role="tab" aria-selected={searchKind === "airport"} onClick={() => chooseSearchKind("airport")}><Gauge size={13} aria-hidden="true" /> Airports</button>
-                  <button type="button" role="tab" aria-selected={searchKind === "city"} onClick={() => chooseSearchKind("city")}><MapPinned size={13} aria-hidden="true" /> Cities</button>
+              <aside className="destinations-panel destinations-panel--popular" aria-label="Popular destinations">
+                <header>
+                  <div><span>Destinations</span></div>
+                  <Compass size={20} aria-hidden="true" />
+                </header>
+                <div className="destination-tabs" role="tablist" aria-label="Destination lists">
+                  <button type="button" role="tab" aria-selected={destinationView === "popular"} onClick={() => setDestinationView("popular")}><Star size={13} aria-hidden="true" fill="currentColor" /> Most visited</button>
+                  <button type="button" role="tab" aria-selected={destinationView === "favorites"} onClick={() => setDestinationView("favorites")}><Heart size={13} aria-hidden="true" fill={destinationView === "favorites" ? "currentColor" : "none"} /> Favorites</button>
                 </div>
-                {searchError && <p className="search-error" role="alert">{searchError}</p>}
-                <div className="search-results" aria-label="Location search results">
-                  {searchKind === "airport" && airportResults.map((airport, index) => (
-                    <button type="button" key={airport.ident} onClick={() => selectAirport(airport)} disabled={searching}>
-                      <span className="result-rank">{index + 1}</span>
-                      <strong>{airport.iata || airport.ident}</strong>
-                      <span>{airport.name}</span>
-                      <small>{airport.municipality || airport.country} · RWY {airport.runway} · {Math.round(airport.lengthFeet).toLocaleString()} ft</small>
-                    </button>
-                  ))}
-                  {searchKind === "city" && cityResults.map((city, index) => (
-                    <button type="button" key={city.id} onClick={() => selectCity(city)} disabled={searching}>
-                      <span className="result-rank">{index + 1}</span>
-                      <strong>{city.label.split(",")[0]}</strong>
-                      <span>{city.label}</span>
-                      <small>{city.latitude.toFixed(4)}, {city.longitude.toFixed(4)} · airborne</small>
-                    </button>
-                  ))}
-                </div>
+                {destinationView === "popular" ? (
+                  <div className="popular-destinations">
+                    {POPULAR_DESTINATIONS.map((destination, index) => (
+                      <button type="button" key={destination.id} onClick={() => selectPopularDestination(destination)}>
+                        <span>{index + 1}</span>
+                        <strong>{destination.label}</strong>
+                        <small>{destination.visits} visits</small>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="destinations-empty">
+                    <Heart size={22} aria-hidden="true" />
+                    <strong>No saved places yet</strong>
+                    <span>Save a selected location to find it here.</span>
+                  </div>
+                )}
               </aside>
             </div>
           </div>
