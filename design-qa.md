@@ -35,16 +35,16 @@ Date: 2026-08-19
 
 - Fonts and typography: Rajdhani remains the display/UI face, Inter remains the body face, and JetBrains Mono remains the technical-label face. Weight, uppercase treatment, tracking, truncation, and hierarchy match the reference closely without text collisions.
 - Spacing and layout rhythm: the outer frame was widened to 1528 px and the desktop grid uses fixed source-like tracks with distributed gaps. The hero, search field, result panel, side rails, compact setup card, and action row align without overlap.
-- Colors and visual tokens: the established navy, cyan, muted blue-gray, white, and restrained amber tokens map to the source palette. Active tabs, selected controls, disabled options, borders, and translucent surfaces remain coherent over the globe.
+- Colors and visual tokens: the established navy, cyan, muted blue-gray, white, and restrained amber tokens map to the source palette. Active navigation, selected controls, borders, and translucent surfaces remain coherent over the globe.
 - Image quality and asset fidelity: the live Cesium globe, exact source WFS brand mark, and real local Cessna preview are used. No placeholder image, emoji, handcrafted SVG, or CSS-drawn product illustration remains.
-- Copy and content: fixed labels match the reference where the simulator supports them. Unsupported double-click selection is not claimed. Fuel remains expressed in gallons, Clear is the only implemented weather preset, and unavailable Taxi/Approach modes are visibly disabled.
+- Copy and content: fixed labels match the reference where the simulator supports them. Unsupported double-click selection, fuel assignment, Taxi/Approach starts, aircraft details, Shop, Career, placeholder Flight School/Ring Runs navigation, inactive weather presets, and persistent Favorites are not claimed by the current interface.
 
 ## Interaction, accessibility, and responsiveness verification
 
 - City search for `new york` returned two realistic results directly beneath the input.
-- Selecting New York opened setup without starting a flight and reset the scroll container to the top, preventing the hero/promo overlap seen in an intermediate pass.
-- Most Visited and Favorites tabs switch correctly; Favorites presents a clear empty state.
-- Save toggles to Saved; the time selector changed to 15:00; AIR/RWY availability correctly reflects a city selection.
+- Selecting New York opened setup without starting a flight and reset the scroll container to the top, preventing the hero overlap seen in an intermediate pass.
+- Most Visited remains the only destination list because the non-persistent Favorites/Save affordances were removed.
+- The time selector changed to 15:00; AIR/RWY availability correctly reflects a city selection.
 - At 390 × 844, the setup becomes a single-column scroll surface above the fixed mobile navigation, with all primary controls reachable.
 - Semantic labels, selected/pressed/disabled states, alt text, focus treatment, and practical mobile targets remain present.
 - Browser console errors after desktop and mobile checks: zero.
@@ -64,6 +64,6 @@ Date: 2026-08-19
 ## Follow-up polish
 
 - P3 — The reference uses an H-182 aircraft card and profile avatar, while this simulator intentionally retains its real Cessna 172SP and existing Sound/Controls/Close actions.
-- P3 — Fuel assignment changes setup UI only because the current flight model does not simulate fuel mass or consumption.
+- Resolved — The cosmetic-only fuel assignment control was removed because the current flight model does not simulate fuel mass or consumption.
 
 final result: passed

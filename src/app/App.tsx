@@ -5,7 +5,6 @@ import {
   Compass,
   Flag,
   Gauge,
-  Heart,
   Link2,
   LoaderCircle,
   MapPinned,
@@ -17,7 +16,6 @@ import {
   Search,
   Settings,
   SlidersHorizontal,
-  Star,
   Sun,
   Volume2,
   VolumeX,
@@ -126,10 +124,6 @@ function App() {
   const [shareStatus, setShareStatus] = useState("");
   const [selectedPlace, setSelectedPlace] = useState<SelectedPlace | null>(null);
   const [setupHour, setSetupHour] = useState(12);
-  const [fuelPercent, setFuelPercent] = useState(50);
-  const [placeSaved, setPlaceSaved] = useState(false);
-  const [showPromo, setShowPromo] = useState(true);
-  const [destinationView, setDestinationView] = useState<"popular" | "favorites">("popular");
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showControls, setShowControls] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -340,7 +334,6 @@ function App() {
       label: airport.name,
       secondary: `${airport.municipality || airport.country} · ${airport.iata || airport.ident} · RWY ${airport.runway}`,
     });
-    setPlaceSaved(false);
     setShareStatus("");
     engineRef.current?.showAirportMarkers([airport]);
     window.requestAnimationFrame(() => {
@@ -358,7 +351,6 @@ function App() {
       secondary: locationParts.join(",").trim() || `${city.latitude.toFixed(4)}, ${city.longitude.toFixed(4)}`,
     });
     setSpawnMode("air");
-    setPlaceSaved(false);
     setShareStatus("");
     engineRef.current?.clearAirportMarkers();
     window.requestAnimationFrame(() => {
@@ -432,7 +424,6 @@ function App() {
 
   const clearSelectedPlace = () => {
     setSelectedPlace(null);
-    setPlaceSaved(false);
     setShareStatus("");
     engineRef.current?.clearAirportMarkers();
   };
@@ -596,7 +587,7 @@ function App() {
       )}
 
       {showBriefing && status.phase === "ready" && (
-        <section className={`setup-layer${flightTransition.phase !== "idle" ? " setup-layer--transitioning" : ""}${showPromo && setupView === "explore" ? " setup-layer--promo" : ""}`} aria-label="World search and flight controls">
+        <section className={`setup-layer${flightTransition.phase !== "idle" ? " setup-layer--transitioning" : ""}`} aria-label="World search and flight controls">
           <header className="setup-nav">
             <div className="setup-brand">
               <img className="setup-brand__mark" src="https://worldflightsim.com/assets/brand/wfs-mark-white.png" alt="WFS" />
@@ -604,10 +595,7 @@ function App() {
             </div>
             <div className="setup-primary-nav">
               <button type="button" className={setupView === "explore" ? "is-active" : ""} onClick={() => setSetupView("explore")}>Explore</button>
-              <span>Flight school</span>
               <button type="button" className={setupView === "challenges" ? "is-active" : ""} onClick={() => setSetupView("challenges")}>Challenges</button>
-              <span>Ring runs</span>
-              <span>Career</span>
             </div>
             <nav aria-label="Setup actions">
               <button type="button" onClick={toggleSound} aria-label={`Sound ${soundEnabled ? "on" : "off"}`} aria-pressed={soundEnabled}>
@@ -617,15 +605,6 @@ function App() {
               <button type="button" onClick={returnToFlight} aria-label="Close"><X size={17} aria-hidden="true" /></button>
             </nav>
           </header>
-
-          {showPromo && setupView === "explore" && (
-            <aside className="setup-promo" aria-label="New aircraft announcement">
-              <span>New aircraft</span>
-              <strong>Premium aircraft are available in the Shop</strong>
-              <button type="button">View shop</button>
-              <button type="button" className="setup-promo__close" onClick={() => setShowPromo(false)} aria-label="Dismiss announcement"><X size={16} aria-hidden="true" /></button>
-            </aside>
-          )}
 
           {setupView === "explore" ? (
           <div ref={setupScrollRef} className={`setup-scroll${selectedPlace ? " setup-scroll--place-selected" : ""}`}>
@@ -650,7 +629,6 @@ function App() {
                     <div><dt>Stall</dt><dd>48 <small>kt</small></dd></div>
                     <div><dt>Ceiling</dt><dd>14,000 <small>ft</small></dd></div>
                   </dl>
-                  <button type="button" className="aircraft-card__details">View details</button>
                 </div>
               </aside>
 
@@ -670,7 +648,7 @@ function App() {
                       aria-expanded={!selectedPlace && Boolean(searchError || airportResults.length || cityResults.length)}
                       placeholder={searchKind === "airport" ? "Search airport, ICAO, or IATA…" : "Search any city…"}
                     />
-                    <button type="submit" aria-label="Search" disabled={searching}><kbd>{searching ? "…" : "⌘K"}</kbd></button>
+                    <button type="submit" aria-label="Search" disabled={searching}>{searching ? "…" : "Search"}</button>
                   </form>
 
                   {!selectedPlace && (
@@ -726,8 +704,6 @@ function App() {
                         <div className="spawn-mode spawn-mode--expanded" aria-label="Airport spawn mode">
                           <button type="button" aria-pressed={spawnMode === "air"} onClick={() => setSpawnMode("air")}><strong>AIR</strong><span>Airborne</span></button>
                           <button type="button" aria-pressed={spawnMode === "runway"} onClick={() => setSpawnMode("runway")} disabled={selectedPlace.kind === "city"}><strong>RWY</strong><span>Runway</span></button>
-                          <button type="button" disabled title="Taxi starts are not available yet"><strong>TAXI</strong><span>Parking</span></button>
-                          <button type="button" disabled title="Approach starts are not available yet"><strong>APP</strong><span>Final</span></button>
                         </div>
                       </section>
 
@@ -746,25 +722,10 @@ function App() {
                         </select>
                       </section>
 
-                      <section className="setup-option-card setup-option-card--weather">
-                        <span>Weather</span>
-                        <div>
-                          <button type="button" aria-pressed="true">Clear</button>
-                          <button type="button" disabled title="Weather presets are not available yet">Scattered</button>
-                          <button type="button" disabled title="Weather presets are not available yet">Cloudy</button>
-                        </div>
-                      </section>
                     </div>
-
-                    <section className="fuel-control">
-                      <div><span>Fuel assigned</span><strong>{Math.round(fuelPercent * 0.56)} gal</strong></div>
-                      <output htmlFor="fuel-assigned">{fuelPercent}% tank · approximately {Math.round(fuelPercent * 0.56)} gal reserve</output>
-                      <input id="fuel-assigned" type="range" min="20" max="100" value={fuelPercent} onChange={(event) => setFuelPercent(Number(event.target.value))} />
-                    </section>
 
                     <footer className="selected-flight-setup__actions">
                       <button type="button" className="selected-takeoff-button" onClick={() => void takeOffFromSelectedPlace()} disabled={searching}><Plane size={20} aria-hidden="true" /> Take off</button>
-                      <button type="button" aria-pressed={placeSaved} onClick={() => setPlaceSaved((saved) => !saved)}><Heart size={19} aria-hidden="true" fill={placeSaved ? "currentColor" : "none"} /> {placeSaved ? "Saved" : "Save"}</button>
                       <button type="button" onClick={() => void copySelectedPlaceLink()}><Link2 size={18} aria-hidden="true" /> Share this spot</button>
                     </footer>
                     <p className="selected-flight-setup__status" aria-live="polite">{shareStatus || "Choose your start, then take off from this exact spot."}</p>
@@ -777,27 +738,15 @@ function App() {
                   <div><span>Destinations</span></div>
                   <Compass size={20} aria-hidden="true" />
                 </header>
-                <div className="destination-tabs" role="tablist" aria-label="Destination lists">
-                  <button type="button" role="tab" aria-selected={destinationView === "popular"} onClick={() => setDestinationView("popular")}><Star size={13} aria-hidden="true" fill="currentColor" /> Most visited</button>
-                  <button type="button" role="tab" aria-selected={destinationView === "favorites"} onClick={() => setDestinationView("favorites")}><Heart size={13} aria-hidden="true" fill={destinationView === "favorites" ? "currentColor" : "none"} /> Favorites</button>
+                <div className="popular-destinations">
+                  {POPULAR_DESTINATIONS.map((destination, index) => (
+                    <button type="button" key={destination.id} onClick={() => selectPopularDestination(destination)}>
+                      <span>{index + 1}</span>
+                      <strong>{destination.label}</strong>
+                      <small>{destination.visits} visits</small>
+                    </button>
+                  ))}
                 </div>
-                {destinationView === "popular" ? (
-                  <div className="popular-destinations">
-                    {POPULAR_DESTINATIONS.map((destination, index) => (
-                      <button type="button" key={destination.id} onClick={() => selectPopularDestination(destination)}>
-                        <span>{index + 1}</span>
-                        <strong>{destination.label}</strong>
-                        <small>{destination.visits} visits</small>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="destinations-empty">
-                    <Heart size={22} aria-hidden="true" />
-                    <strong>No saved places yet</strong>
-                    <span>Save a selected location to find it here.</span>
-                  </div>
-                )}
               </aside>
             </div>
           </div>
