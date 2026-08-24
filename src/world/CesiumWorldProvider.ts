@@ -13,7 +13,8 @@ import {
   type TerrainProvider,
   type Viewer,
 } from "cesium";
-import type { DaylightState, WorldMemoryStats, WorldQuality, WorldVisualProvider } from "./types";
+import type { EnvironmentVisualState, WorldMemoryStats, WorldQuality, WorldVisualProvider } from "./types";
+import { calculateEnvironmentVisualProfile } from "./DaylightSystem";
 
 export const CESIUM_QUALITY_SETTINGS = {
   low: {
@@ -237,20 +238,21 @@ export class CesiumWorldProvider implements WorldVisualProvider {
     }
   }
 
-  setDaylight(state: DaylightState): void {
+  setEnvironment(state: EnvironmentVisualState): void {
     if (!this.buildings) return;
+    const profile = calculateEnvironmentVisualProfile(state);
     if (this.imagery) {
-      this.imagery.brightness = 0.96 + state.daylight * 0.09;
-      this.imagery.contrast = 1.08 + state.daylight * 0.04;
-      this.imagery.saturation = 0.68 + state.daylight * 0.06;
-      this.imagery.gamma = 1 + state.horizon * 0.025;
+      this.imagery.brightness = profile.imageryBrightness;
+      this.imagery.contrast = profile.imageryContrast;
+      this.imagery.saturation = profile.imagerySaturation;
+      this.imagery.gamma = profile.imageryGamma;
       this.imagery.hue = 0;
     }
-    this.buildings.imageBasedLighting.imageBasedLightingFactor.x = 0.44 + state.daylight * 0.43;
-    this.buildings.imageBasedLighting.imageBasedLightingFactor.y = 0.28 + state.daylight * 0.34;
-    this.buildings.environmentMapManager.brightness = 0.58 + state.daylight * 0.42;
-    this.buildings.environmentMapManager.saturation = 0.9 + state.daylight * 0.05;
-    this.buildings.environmentMapManager.atmosphereScatteringIntensity = 0.72 + state.daylight * 0.58;
+    this.buildings.imageBasedLighting.imageBasedLightingFactor.x = profile.diffuseIbl;
+    this.buildings.imageBasedLighting.imageBasedLightingFactor.y = profile.specularIbl;
+    this.buildings.environmentMapManager.brightness = profile.environmentBrightness;
+    this.buildings.environmentMapManager.saturation = profile.environmentSaturation;
+    this.buildings.environmentMapManager.atmosphereScatteringIntensity = profile.atmosphereScatteringIntensity;
   }
 
   isBuildingPick(picked: unknown): boolean {

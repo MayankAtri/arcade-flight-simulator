@@ -140,10 +140,5 @@ export const FLIGHT_TUNING = Object.freeze({
   flybyFovDegrees: 50,
   topDownHeightMeters: 95,
   topDownFovDegrees: 44,
-  cockpitFovDegrees: 82,
-  cockpitForwardOffsetMeters: 1.5,
-  cockpitRightOffsetMeters: 0,
-  cockpitUpOffsetMeters: 1.72,
-  cockpitLookDownDegrees: 4,
   fixedStepSeconds: 1 / 60,
 });

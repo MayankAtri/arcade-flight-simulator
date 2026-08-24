@@ -54,7 +54,7 @@ export const FLIGHT_CHALLENGES: readonly FlightChallenge[] = [
     destinationLabel: "Lisbon Humberto Delgado",
     runwayHeadingDegrees: 344,
     localHour: 17.5,
-    timeLabel: "17:30 Golden hour",
+    timeLabel: "Sunset",
     objectives: [
       "Depart Cascais from runway 35",
       "Round the coast at Guincho",
@@ -82,7 +82,7 @@ export const FLIGHT_CHALLENGES: readonly FlightChallenge[] = [
     destinationCode: "KTEB",
     destinationLabel: "Teterboro",
     localHour: 8.5,
-    timeLabel: "08:30",
+    timeLabel: "Sunrise",
     objectives: [
       "Depart JFK",
       "Cross New York Harbor",
@@ -111,7 +111,7 @@ export const FLIGHT_CHALLENGES: readonly FlightChallenge[] = [
     destinationCode: "LFMN",
     destinationLabel: "Nice Côte d’Azur",
     localHour: 17.5,
-    timeLabel: "17:30 Sunset",
+    timeLabel: "Sunset",
     objectives: [
       "Depart Nice over the water",
       "Follow the Riviera eastbound",
@@ -140,7 +140,7 @@ export const FLIGHT_CHALLENGES: readonly FlightChallenge[] = [
     destinationLabel: "Paris Orly",
     runwayHeadingDegrees: 249,
     localHour: 16,
-    timeLabel: "16:00",
+    timeLabel: "Sunset",
     objectives: [
       "Depart Le Bourget from runway 27",
       "Cross central Paris along the Seine",
@@ -168,7 +168,7 @@ export const FLIGHT_CHALLENGES: readonly FlightChallenge[] = [
     destinationCode: "LPMA",
     destinationLabel: "Madeira Cristiano Ronaldo",
     localHour: 10,
-    timeLabel: "10:00",
+    timeLabel: "Noon",
     objectives: [
       "Depart Madeira from runway 05",
       "Cross the island ridge with energy in hand",
@@ -196,7 +196,7 @@ export const FLIGHT_CHALLENGES: readonly FlightChallenge[] = [
     destinationCode: "KMRY",
     destinationLabel: "Monterey Regional",
     localHour: 15,
-    timeLabel: "15:00",
+    timeLabel: "Sunset",
     objectives: [
       "Depart Monterey from runway 10R",
       "Track the coast southbound",

@@ -15,7 +15,7 @@ import {
 } from "../flight/math";
 import { FLIGHT_TUNING as T } from "../flight/tuning";
 
-export const CAMERA_MODES = ["chase", "chase-far", "flyby", "top-down", "cockpit"] as const;
+export const CAMERA_MODES = ["chase", "chase-far", "flyby", "top-down"] as const;
 export type CameraMode = (typeof CAMERA_MODES)[number];
 
 const CAMERA_MODE_LABELS: Record<CameraMode, string> = {
@@ -23,7 +23,6 @@ const CAMERA_MODE_LABELS: Record<CameraMode, string> = {
   "chase-far": "External far",
   flyby: "Flyby",
   "top-down": "Top down",
-  cockpit: "Cockpit",
 };
 
 export const cameraModeLabel = (mode: CameraMode): string => CAMERA_MODE_LABELS[mode];
@@ -57,34 +56,6 @@ export class CameraSystem {
     const aircraftUp = rotateVec3(orientation, { x: 0, y: 0, z: -1 });
     const localBasis = enuBasisAt(ecefToGeodetic(position));
     const localUp = localBasis.up;
-
-    if (this.mode === "cockpit") {
-      const cockpitPosition = add(
-        position,
-        add(
-          scale(forward, T.cockpitForwardOffsetMeters),
-          add(scale(aircraftRight, T.cockpitRightOffsetMeters), scale(aircraftUp, T.cockpitUpOffsetMeters)),
-        ),
-      );
-      const lookDownRadians = CesiumMath.toRadians(T.cockpitLookDownDegrees);
-      const cockpitDirection = add(
-        scale(forward, Math.cos(lookDownRadians)),
-        scale(aircraftUp, -Math.sin(lookDownRadians)),
-      );
-      const cockpitUp = add(
-        scale(forward, Math.sin(lookDownRadians)),
-        scale(aircraftUp, Math.cos(lookDownRadians)),
-      );
-      camera.setView({
-        destination: new Cartesian3(cockpitPosition.x, cockpitPosition.y, cockpitPosition.z),
-        orientation: {
-          direction: new Cartesian3(cockpitDirection.x, cockpitDirection.y, cockpitDirection.z),
-          up: new Cartesian3(cockpitUp.x, cockpitUp.y, cockpitUp.z),
-        },
-      });
-      this.setFov(camera, T.cockpitFovDegrees, 0.12);
-      return;
-    }
 
     if (this.mode === "top-down") {
       const topDownPosition = add(position, scale(localUp, T.topDownHeightMeters));

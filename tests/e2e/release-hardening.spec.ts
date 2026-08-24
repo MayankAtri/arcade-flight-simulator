@@ -37,7 +37,7 @@ test("falls back to the basic world when Cesium ion assets fail", async ({ page 
   });
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Arcade Flight Simulator" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "World Flight Sim" })).toBeVisible();
   await expect(page.getByText("Basic world", { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Choose the world" })).toBeVisible();
 });
@@ -56,8 +56,7 @@ test("stops at streamed OSM building geometry and recovers at a safe spawn", asy
   await expect(page.getByRole("heading", { name: "Building collision" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByLabel("Development flight telemetry")).toContainText("CRASHED");
 
-  await page.getByRole("button", { name: "World search" }).click();
-  await page.getByRole("button", { name: "Dubai airborne" }).click();
+  await page.goto("/?airport=OMDB&mode=air&heading=121&altitude=304.8");
   await expect(page.getByRole("heading", { name: "Building collision" })).not.toBeVisible();
   await expect(page.getByLabel("Development flight telemetry")).toContainText("AIRBORNE", { timeout: 60_000 });
 });

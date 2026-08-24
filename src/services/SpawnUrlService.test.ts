@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { findAirport } from "./AirportService";
-import { parseSpawnUrl } from "./SpawnUrlService";
+import { parseSpawnUrl, parseWeatherPreset, updateSpawnUrl } from "./SpawnUrlService";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("shareable spawn URLs", () => {
   it("parses coordinate, mode, heading, altitude, and elevation parameters", () => {
@@ -31,5 +35,23 @@ describe("shareable spawn URLs", () => {
     expect(parseSpawnUrl("", findAirport)).toBeNull();
     expect(parseSpawnUrl("?lat=120&lon=0", findAirport)).toBeNull();
     expect(parseSpawnUrl("?airport=NOPE", findAirport)).toBeNull();
+  });
+
+  it("validates weather presets and defaults missing or invalid values to Clear", () => {
+    expect(parseWeatherPreset("?weather=scattered")).toBe("scattered");
+    expect(parseWeatherPreset("?weather=cloudy")).toBe("cloudy");
+    expect(parseWeatherPreset("?weather=storm")).toBe("clear");
+    expect(parseWeatherPreset("")).toBe("clear");
+  });
+
+  it("writes the selected weather into share URLs", () => {
+    const replaceState = vi.fn();
+    vi.stubGlobal("location", { pathname: "/", search: "" });
+    vi.stubGlobal("history", { replaceState });
+    const spawn = parseSpawnUrl("?lat=40.71273&lon=-74.00602&mode=air", findAirport)!;
+    updateSpawnUrl(spawn, undefined, "cloudy");
+    expect(replaceState).toHaveBeenCalledOnce();
+    const url = replaceState.mock.calls[0][2] as string;
+    expect(parseWeatherPreset(url.slice(url.indexOf("?")))).toBe("cloudy");
   });
 });

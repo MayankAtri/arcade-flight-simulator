@@ -86,7 +86,13 @@ export class FlightModel {
     }
 
     const throttleDirection = Number(controls.throttleUp) - Number(controls.throttleDown);
-    state.throttle = clamp(state.throttle + throttleDirection * T.throttleRatePerSecond * dt, 0, 1);
+    if (throttleDirection !== 0) {
+      state.throttle = clamp(state.throttle + throttleDirection * T.throttleRatePerSecond * dt, 0, 1);
+    } else if (typeof controls.throttleTarget === "number" && Number.isFinite(controls.throttleTarget)) {
+      const target = clamp(controls.throttleTarget, 0, 1);
+      const maximumChange = T.throttleRatePerSecond * dt;
+      state.throttle += clamp(target - state.throttle, -maximumChange, maximumChange);
+    }
     state.brakes = controls.brake ? 1 : 0;
 
     const geodetic = ecefToGeodetic(state.positionECEF);
@@ -353,13 +359,18 @@ export class FlightModel {
     const geodetic = ecefToGeodetic(state.positionECEF);
     const basis = enuBasisAt(geodetic);
     const forward = rotateVec3(state.bodyToECEF, { x: 1, y: 0, z: 0 });
+    const right = rotateVec3(state.bodyToECEF, { x: 0, y: 1, z: 0 });
+    const aircraftUp = rotateVec3(state.bodyToECEF, { x: 0, y: 0, z: -1 });
+    const airspeedMetersPerSecond = magnitude(state.velocityECEF);
     return {
-      airspeedMetersPerSecond: magnitude(state.velocityECEF),
+      airspeedMetersPerSecond,
       altitudeMslMeters: geodetic.height,
       altitudeAglMeters: state.grounded || state.crashed
         ? 0
         : Math.max(0, geodetic.height - environment.groundHeight - T.groundClearanceMeters),
       headingDegrees: headingFromForward(geodetic, forward),
+      pitchDegrees: Math.asin(clamp(dot(forward, basis.up), -1, 1)) * 180 / Math.PI,
+      bankDegrees: Math.atan2(-dot(right, basis.up), dot(aircraftUp, basis.up)) * 180 / Math.PI,
       verticalSpeedMetersPerSecond: dot(state.velocityECEF, basis.up),
       throttle: state.throttle,
       brakes: state.brakes,
@@ -368,6 +379,7 @@ export class FlightModel {
       crashed: state.crashed,
       crashReason: this.crashReason,
       landingStatus: this.landingStatus,
+      stalled: !state.grounded && airspeedMetersPerSecond < T.stallSpeedMetersPerSecond,
     };
   }
 

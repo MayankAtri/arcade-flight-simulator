@@ -9,7 +9,8 @@ import {
   type Scene,
 } from "cesium";
 import { multiplyQuat, quatFromRotationVector, type Quat, type Vec3 } from "../flight/math";
-import type { DaylightState } from "../world/types";
+import type { EnvironmentVisualState } from "../world/types";
+import { calculateEnvironmentVisualProfile } from "../world/DaylightSystem";
 
 export class AircraftRenderer {
   private model: Model | null = null;
@@ -47,20 +48,21 @@ export class AircraftRenderer {
     this.model.modelMatrix = Matrix4.fromRotationTranslation(rotation, new Cartesian3(position.x, position.y, position.z));
   }
 
-  setDaylight(state: DaylightState): void {
+  setEnvironment(state: EnvironmentVisualState): void {
     if (!this.model) return;
+    const profile = calculateEnvironmentVisualProfile(state);
     const daylight = state.daylight;
-    const directIntensity = 1.02 + daylight * 0.48;
+    const directIntensity = profile.aircraftDirectIntensity;
     const lightColor = this.model.lightColor ?? new Cartesian3();
-    lightColor.x = directIntensity * (1 + state.horizon * 0.06);
-    lightColor.y = directIntensity * (1 + state.horizon * 0.015);
-    lightColor.z = directIntensity * (1 - state.horizon * 0.055);
+    lightColor.x = directIntensity * (1 + daylight.horizon * 0.055);
+    lightColor.y = directIntensity * (1 + daylight.horizon * 0.012);
+    lightColor.z = directIntensity * (1 - daylight.horizon * 0.05);
     this.model.lightColor = lightColor;
-    this.model.imageBasedLighting.imageBasedLightingFactor.x = 0.78 + daylight * 0.22;
-    this.model.imageBasedLighting.imageBasedLightingFactor.y = 0.62 + daylight * 0.28;
-    this.model.environmentMapManager.brightness = 0.88 + daylight * 0.2;
-    this.model.environmentMapManager.saturation = 0.92 + daylight * 0.04;
-    this.model.environmentMapManager.atmosphereScatteringIntensity = 0.72 + daylight * 0.58;
+    this.model.imageBasedLighting.imageBasedLightingFactor.x = profile.aircraftDiffuseIbl;
+    this.model.imageBasedLighting.imageBasedLightingFactor.y = profile.aircraftSpecularIbl;
+    this.model.environmentMapManager.brightness = profile.aircraftEnvironmentBrightness;
+    this.model.environmentMapManager.saturation = profile.environmentSaturation;
+    this.model.environmentMapManager.atmosphereScatteringIntensity = profile.atmosphereScatteringIntensity;
   }
 
   setVisible(visible: boolean): void {

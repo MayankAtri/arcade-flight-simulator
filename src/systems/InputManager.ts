@@ -1,6 +1,40 @@
-import type { FlightControls } from "../flight/types";
+import type { FlightControls, TouchFlightControls } from "../flight/types";
 
 type Action = "camera" | "flaps" | "respawn" | "pause" | "menu";
+
+export const EMPTY_TOUCH_CONTROLS: TouchFlightControls = {
+  pitch: 0,
+  roll: 0,
+  yaw: 0,
+  throttleTarget: null,
+  brake: false,
+};
+
+const clampAxis = (value: number): number => Math.max(-1, Math.min(1, Number.isFinite(value) ? value : 0));
+const clampThrottle = (value: number | null): number | null => (
+  value === null ? null : Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0))
+);
+
+export const updateTouchControls = (
+  current: TouchFlightControls,
+  next: Partial<TouchFlightControls>,
+): TouchFlightControls => ({
+  pitch: next.pitch === undefined ? current.pitch : clampAxis(next.pitch),
+  roll: next.roll === undefined ? current.roll : clampAxis(next.roll),
+  yaw: next.yaw === undefined ? current.yaw : clampAxis(next.yaw),
+  throttleTarget: next.throttleTarget === undefined
+    ? current.throttleTarget
+    : clampThrottle(next.throttleTarget),
+  brake: next.brake ?? current.brake,
+});
+
+export const releaseTouchMomentaryControls = (current: TouchFlightControls): TouchFlightControls => ({
+  ...current,
+  pitch: 0,
+  roll: 0,
+  yaw: 0,
+  brake: false,
+});
 
 export const flightControlsFromPressed = (pressed: ReadonlySet<string>): FlightControls => ({
   pitch:
@@ -15,18 +49,45 @@ export const flightControlsFromPressed = (pressed: ReadonlySet<string>): FlightC
   brake: pressed.has("KeyB"),
 });
 
+export const mergeFlightControls = (
+  keyboard: FlightControls,
+  touch: TouchFlightControls,
+): FlightControls => ({
+  pitch: keyboard.pitch !== 0 ? keyboard.pitch : touch.pitch,
+  roll: keyboard.roll !== 0 ? keyboard.roll : touch.roll,
+  yaw: keyboard.yaw !== 0 ? keyboard.yaw : touch.yaw,
+  throttleUp: keyboard.throttleUp,
+  throttleDown: keyboard.throttleDown,
+  throttleTarget: keyboard.throttleUp || keyboard.throttleDown ? null : touch.throttleTarget,
+  brake: keyboard.brake || touch.brake,
+});
+
 export class InputManager {
   private readonly pressed = new Set<string>();
   private readonly actions = new Set<Action>();
+  private touchControls: TouchFlightControls = { ...EMPTY_TOUCH_CONTROLS };
 
   constructor() {
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("blur", this.onBlur);
+    document.addEventListener("visibilitychange", this.onVisibilityChange);
   }
 
   controls(): FlightControls {
-    return flightControlsFromPressed(this.pressed);
+    return mergeFlightControls(flightControlsFromPressed(this.pressed), this.touchControls);
+  }
+
+  setTouchControls(next: Partial<TouchFlightControls>): void {
+    this.touchControls = updateTouchControls(this.touchControls, next);
+  }
+
+  releaseTouchMomentaryControls(): void {
+    this.touchControls = releaseTouchMomentaryControls(this.touchControls);
+  }
+
+  resetTouchControls(): void {
+    this.touchControls = { ...EMPTY_TOUCH_CONTROLS };
   }
 
   consume(action: Action): boolean {
@@ -39,6 +100,8 @@ export class InputManager {
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("blur", this.onBlur);
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
+    this.resetTouchControls();
   }
 
   private onKeyDown = (event: KeyboardEvent): void => {
@@ -69,5 +132,11 @@ export class InputManager {
 
   private onBlur = (): void => {
     this.pressed.clear();
+    this.releaseTouchMomentaryControls();
+  };
+
+  private onVisibilityChange = (): void => {
+    if (!document.hidden) return;
+    this.onBlur();
   };
 }

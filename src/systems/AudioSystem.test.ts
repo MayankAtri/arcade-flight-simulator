@@ -11,23 +11,23 @@ const flight = {
 
 describe("flight audio mix", () => {
   it("raises engine pitch and wind with throttle and airspeed", () => {
-    const idle = flightAudioMix(flight, false, "chase", true);
-    const fast = flightAudioMix({ ...flight, throttle: 1, airspeedMetersPerSecond: 80 }, false, "chase", true);
+    const idle = flightAudioMix(flight, false, true);
+    const fast = flightAudioMix({ ...flight, throttle: 1, airspeedMetersPerSecond: 80 }, false, true);
     expect(fast.engineFrequency).toBeGreaterThan(idle.engineFrequency + 70);
     expect(fast.engineGain).toBeGreaterThan(idle.engineGain);
     expect(fast.windGain).toBeGreaterThan(0.1);
   });
 
   it("adds ground rumble only while rolling on the ground", () => {
-    const airborne = flightAudioMix({ ...flight, airspeedMetersPerSecond: 25 }, false, "chase", true);
-    const rolling = flightAudioMix({ ...flight, airspeedMetersPerSecond: 25, grounded: true }, false, "chase", true);
+    const airborne = flightAudioMix({ ...flight, airspeedMetersPerSecond: 25 }, false, true);
+    const rolling = flightAudioMix({ ...flight, airspeedMetersPerSecond: 25, grounded: true }, false, true);
     expect(airborne.groundGain).toBe(0);
     expect(rolling.groundGain).toBeGreaterThan(0.1);
   });
 
   it("cuts the engine after a crash and softens the paused mix", () => {
-    const running = flightAudioMix({ ...flight, throttle: 1 }, false, "cockpit", true);
-    const crashed = flightAudioMix({ ...flight, throttle: 1, crashed: true }, true, "cockpit", true);
+    const running = flightAudioMix({ ...flight, throttle: 1 }, false, true);
+    const crashed = flightAudioMix({ ...flight, throttle: 1, crashed: true }, true, true);
     expect(running.engineGain).toBeGreaterThan(0);
     expect(crashed.engineGain).toBe(0);
     expect(crashed.masterGain).toBeLessThan(running.masterGain);
@@ -37,7 +37,6 @@ describe("flight audio mix", () => {
     const menu = flightAudioMix(
       { ...flight, throttle: 1, airspeedMetersPerSecond: 80, grounded: true },
       true,
-      "chase",
       false,
     );
     expect(menu.engineGain).toBe(0);

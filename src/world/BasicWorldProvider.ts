@@ -2,21 +2,24 @@ import {
   Credit,
   EllipsoidTerrainProvider,
   OpenStreetMapImageryProvider,
+  type ImageryLayer,
   type TerrainProvider,
   type Viewer,
 } from "cesium";
-import type { DaylightState, WorldMemoryStats, WorldQuality, WorldVisualProvider } from "./types";
+import type { EnvironmentVisualState, WorldMemoryStats, WorldQuality, WorldVisualProvider } from "./types";
+import { calculateEnvironmentVisualProfile } from "./DaylightSystem";
 
 export class BasicWorldProvider implements WorldVisualProvider {
   readonly label = "Basic world";
   readonly terrainProvider: TerrainProvider = new EllipsoidTerrainProvider();
   private viewer: Viewer | null = null;
+  private imagery: ImageryLayer | null = null;
 
   async initialize(viewer: Viewer): Promise<void> {
     this.viewer = viewer;
     viewer.terrainProvider = this.terrainProvider;
     viewer.imageryLayers.removeAll();
-    viewer.imageryLayers.addImageryProvider(
+    this.imagery = viewer.imageryLayers.addImageryProvider(
       new OpenStreetMapImageryProvider({
         url: "https://tile.openstreetmap.org/",
         maximumLevel: 18,
@@ -33,7 +36,15 @@ export class BasicWorldProvider implements WorldVisualProvider {
     this.viewer.scene.globe.maximumScreenSpaceError = level === "low" ? 4 : level === "medium" ? 2 : 1.25;
   }
 
-  setDaylight(_state: DaylightState): void {}
+  setEnvironment(state: EnvironmentVisualState): void {
+    if (!this.imagery) return;
+    const profile = calculateEnvironmentVisualProfile(state);
+    this.imagery.brightness = profile.imageryBrightness;
+    this.imagery.contrast = profile.imageryContrast;
+    this.imagery.saturation = profile.imagerySaturation;
+    this.imagery.gamma = profile.imageryGamma;
+    this.imagery.hue = 0;
+  }
 
   isBuildingPick(_picked: unknown): boolean {
     return false;
@@ -54,6 +65,7 @@ export class BasicWorldProvider implements WorldVisualProvider {
   releaseUnusedResources(): void {}
 
   destroy(): void {
+    this.imagery = null;
     this.viewer = null;
   }
 }

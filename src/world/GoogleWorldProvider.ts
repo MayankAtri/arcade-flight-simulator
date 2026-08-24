@@ -6,7 +6,8 @@ import {
   type TerrainProvider,
   type Viewer,
 } from "cesium";
-import type { DaylightState, WorldMemoryStats, WorldQuality, WorldVisualProvider } from "./types";
+import type { EnvironmentVisualState, WorldMemoryStats, WorldQuality, WorldVisualProvider } from "./types";
+import { calculateEnvironmentVisualProfile } from "./DaylightSystem";
 
 export class GoogleWorldProvider implements WorldVisualProvider {
   readonly label = "Google photorealistic · Cesium ion";
@@ -75,13 +76,14 @@ export class GoogleWorldProvider implements WorldVisualProvider {
     this.tileset.foveatedTimeDelay = 0.12;
   }
 
-  setDaylight(state: DaylightState): void {
+  setEnvironment(state: EnvironmentVisualState): void {
     if (!this.tileset) return;
-    this.tileset.imageBasedLighting.imageBasedLightingFactor.x = 0.32 + state.daylight * 0.55;
-    this.tileset.imageBasedLighting.imageBasedLightingFactor.y = 0.22 + state.daylight * 0.45;
-    this.tileset.environmentMapManager.brightness = 0.48 + state.daylight * 0.52;
-    this.tileset.environmentMapManager.saturation = 0.9 + state.daylight * 0.05;
-    this.tileset.environmentMapManager.atmosphereScatteringIntensity = 0.74 + state.daylight * 0.58;
+    const profile = calculateEnvironmentVisualProfile(state);
+    this.tileset.imageBasedLighting.imageBasedLightingFactor.x = profile.diffuseIbl;
+    this.tileset.imageBasedLighting.imageBasedLightingFactor.y = profile.specularIbl;
+    this.tileset.environmentMapManager.brightness = profile.environmentBrightness;
+    this.tileset.environmentMapManager.saturation = profile.environmentSaturation;
+    this.tileset.environmentMapManager.atmosphereScatteringIntensity = profile.atmosphereScatteringIntensity;
   }
 
   isBuildingPick(picked: unknown): boolean {

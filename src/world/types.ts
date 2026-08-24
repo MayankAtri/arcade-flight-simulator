@@ -3,13 +3,22 @@ import type { GeodeticPosition } from "../flight/coordinates";
 
 export type WorldQuality = "low" | "medium" | "high";
 
+export type WeatherPreset = "clear" | "scattered" | "cloudy";
+
 export type DaylightPhase = "dawn" | "day" | "dusk";
 
 export type DaylightState = {
   localHour: number;
+  solarElevationRadians: number;
   daylight: number;
   horizon: number;
+  highSun: number;
   phase: DaylightPhase;
+};
+
+export type EnvironmentVisualState = {
+  daylight: DaylightState;
+  weatherPreset: WeatherPreset;
 };
 
 export type TerrainSample = {
@@ -38,7 +47,7 @@ export interface WorldVisualProvider {
   readonly terrainProvider: TerrainProvider | null;
   initialize(viewer: Viewer): Promise<void>;
   setQuality(level: WorldQuality): void;
-  setDaylight(state: DaylightState): void;
+  setEnvironment(state: EnvironmentVisualState): void;
   isBuildingPick(picked: unknown): boolean;
   memoryStats(): WorldMemoryStats;
   releaseUnusedResources(): void;

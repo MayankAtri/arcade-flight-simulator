@@ -18,6 +18,15 @@ export type FlightControls = {
   yaw: number;
   throttleUp: boolean;
   throttleDown: boolean;
+  throttleTarget?: number | null;
+  brake: boolean;
+};
+
+export type TouchFlightControls = {
+  pitch: number;
+  roll: number;
+  yaw: number;
+  throttleTarget: number | null;
   brake: boolean;
 };
 
@@ -32,6 +41,8 @@ export type FlightTelemetry = {
   altitudeMslMeters: number;
   altitudeAglMeters: number;
   headingDegrees: number;
+  pitchDegrees: number;
+  bankDegrees: number;
   verticalSpeedMetersPerSecond: number;
   throttle: number;
   brakes: number;
@@ -40,6 +51,7 @@ export type FlightTelemetry = {
   crashed: boolean;
   crashReason: "" | "terrain" | "building";
   landingStatus: "" | "smooth" | "hard" | "severe" | "crashed";
+  stalled: boolean;
 };
 
 export type SpawnRequest = {

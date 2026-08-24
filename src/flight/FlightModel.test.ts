@@ -66,6 +66,19 @@ describe("flight model", () => {
     expect(model.state.throttle).toBeGreaterThan(0.99);
   });
 
+  it("approaches a touch throttle target at the existing throttle rate", () => {
+    const model = new FlightModel(SPAWN);
+    model.state.throttle = 0;
+    runSteps(model, { ...NEUTRAL, throttleTarget: 0.5 }, 60);
+    expect(model.state.throttle).toBeCloseTo(FLIGHT_TUNING.throttleRatePerSecond, 2);
+
+    runSteps(model, { ...NEUTRAL, throttleTarget: 0.5 }, 120);
+    expect(model.state.throttle).toBeCloseTo(0.5, 6);
+
+    runSteps(model, { ...NEUTRAL, throttleTarget: 0.2, throttleUp: true }, 30);
+    expect(model.state.throttle).toBeGreaterThan(0.5);
+  });
+
   it("starts and settles near the intended 120 to 125 knot airborne cruise", () => {
     const model = new FlightModel(SPAWN);
     const spawnAirspeedKnots = model.telemetry(ENVIRONMENT).airspeedMetersPerSecond * 1.943844;
@@ -90,6 +103,20 @@ describe("flight model", () => {
     const endGeo = ecefToGeodetic(model.state.positionECEF);
     const endForward = rotateVec3(model.state.bodyToECEF, { x: 1, y: 0, z: 0 });
     expect(dot(endForward, enuBasisAt(endGeo).up)).toBeGreaterThan(startVertical + 0.25);
+  });
+
+  it("reports signed pitch, bank, and the configured stall state for lesson telemetry", () => {
+    const left = new FlightModel(SPAWN);
+    const right = new FlightModel(SPAWN);
+    runSteps(left, { ...NEUTRAL, roll: -1 }, 24);
+    runSteps(right, { ...NEUTRAL, roll: 1 }, 24);
+
+    expect(left.telemetry(ENVIRONMENT).bankDegrees).toBeLessThan(-10);
+    expect(right.telemetry(ENVIRONMENT).bankDegrees).toBeGreaterThan(10);
+    expect(Number.isFinite(right.telemetry(ENVIRONMENT).pitchDegrees)).toBe(true);
+
+    right.state.velocityECEF = scale(right.state.velocityECEF, 0.2);
+    expect(right.telemetry(ENVIRONMENT).stalled).toBe(true);
   });
 
   it("keeps state finite during combined pitch, roll, and yaw", () => {
@@ -508,6 +535,16 @@ describe("flight model", () => {
     expect(model.telemetry(ENVIRONMENT).airspeedMetersPerSecond).toBeGreaterThanOrEqual(
       FLIGHT_TUNING.rotationSpeedMetersPerSecond,
     );
+  });
+
+  it("takes off using an absolute touch throttle target and joystick pitch", () => {
+    const model = new FlightModel(RUNWAY_SPAWN);
+    runSteps(model, { ...NEUTRAL, throttleTarget: 1 }, 720);
+    runSteps(model, { ...NEUTRAL, throttleTarget: 1, pitch: 1 }, 240);
+
+    expect(model.state.throttle).toBeCloseTo(1, 6);
+    expect(model.state.grounded).toBe(false);
+    expect(model.state.crashed).toBe(false);
   });
 
   it("completes three consecutive takeoffs after runway respawns", () => {

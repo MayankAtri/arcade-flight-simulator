@@ -11,15 +11,14 @@ describe("CameraSystem modes", () => {
       "External far",
       "Flyby",
       "Top down",
-      "Cockpit",
     ]);
 
-    for (const expected of ["chase-far", "flyby", "top-down", "cockpit", "chase"] as const) {
+    for (const expected of ["chase-far", "flyby", "top-down", "chase"] as const) {
       expect(camera.cycle()).toBe(expected);
     }
   });
 
   it("wraps the final mode back to external", () => {
-    expect(nextCameraMode("cockpit")).toBe("chase");
+    expect(nextCameraMode("top-down")).toBe("chase");
   });
 });

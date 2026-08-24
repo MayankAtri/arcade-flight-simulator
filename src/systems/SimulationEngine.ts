@@ -20,6 +20,10 @@ import { FlightModel } from "../flight/FlightModel";
 import { add, clamp, lerpVec3, scale, slerpQuat, type Quat, type Vec3 } from "../flight/math";
 import { FLIGHT_TUNING as T } from "../flight/tuning";
 import type { FlightTelemetry, SpawnRequest } from "../flight/types";
+import type { TrainingGate } from "../flight-school/types";
+import { resolveRingGate } from "../ring-runs/geometry";
+import { RingRunSession } from "../ring-runs/session";
+import type { RingCourse, RingRunSnapshot } from "../ring-runs/types";
 import { env } from "../config/env";
 import { PhotorealisticGeocodingService } from "../services/PhotorealisticGeocodingService";
 import type { GeocodingResult } from "../services/GeocodingService";
@@ -30,13 +34,16 @@ import { DaylightSystem } from "../world/DaylightSystem";
 import { GoogleWorldProvider } from "../world/GoogleWorldProvider";
 import { resolveRequestedWorldMode } from "../world/resolveWorldMode";
 import { TerrainSamplingSystem } from "../world/TerrainSamplingSystem";
-import type { DaylightState, WorldQuality, WorldVisualProvider } from "../world/types";
+import type { DaylightState, WeatherPreset, WorldQuality, WorldVisualProvider } from "../world/types";
+import { WeatherSystem } from "../world/WeatherSystem";
 import { shouldReleaseWorldResources } from "../world/resourceEviction";
 import { AircraftRenderer } from "./AircraftRenderer";
 import { AudioSystem } from "./AudioSystem";
 import { CameraSystem, type CameraMode } from "./CameraSystem";
 import { InputManager } from "./InputManager";
 import { SceneCollisionSystem } from "./SceneCollisionSystem";
+import { RingRenderer } from "./RingRenderer";
+import { TrainingGateRenderer } from "./TrainingGateRenderer";
 
 export type RuntimeTelemetry = FlightTelemetry & {
   latitudeDegrees: number;
@@ -48,6 +55,9 @@ export type RuntimeTelemetry = FlightTelemetry & {
   quality: WorldQuality;
   terrainReliable: boolean;
   daylight: DaylightState;
+  weatherPreset: WeatherPreset;
+  simulationTimeSeconds: number;
+  ringRun: RingRunSnapshot | null;
 };
 
 export type EngineStatus = {
@@ -99,6 +109,10 @@ const automaticQualityCeiling = (): WorldQuality => {
   return typeof deviceMemory === "number" && deviceMemory <= 8 ? "medium" : "high";
 };
 
+const lowerQuality = (quality: WorldQuality): WorldQuality => (
+  quality === "high" ? "medium" : "low"
+);
+
 type SimulationCallbacks = {
   onTelemetry: (telemetry: RuntimeTelemetry) => void;
   onStatus: (status: EngineStatus) => void;
@@ -133,6 +147,9 @@ export class SimulationEngine {
   private readonly aircraft = new AircraftRenderer();
   private readonly audio = new AudioSystem();
   private readonly camera = new CameraSystem();
+  private readonly trainingGates = new TrainingGateRenderer();
+  private readonly ringRenderer = new RingRenderer();
+  private ringRun: RingRunSession | null = null;
   private previousPositionECEF: Vec3 = { ...this.flight.state.positionECEF };
   private previousBodyToECEF: Quat = { ...this.flight.state.bodyToECEF };
   private lastSpawn = DEFAULT_SPAWN;
@@ -140,6 +157,7 @@ export class SimulationEngine {
   private accumulator = 0;
   private lastFrameTime = 0;
   private lastTelemetryTime = 0;
+  private simulationTimeSeconds = 0;
   private fps = 60;
   private fpsWindowStart = 0;
   private fpsFrames = 0;
@@ -151,6 +169,8 @@ export class SimulationEngine {
   private photorealisticGeocoder: PhotorealisticGeocodingService | null = null;
   private sceneCollision: SceneCollisionSystem | null = null;
   private daylight: DaylightSystem | null = null;
+  private weather: WeatherSystem | null = null;
+  private weatherPreset: WeatherPreset = "clear";
   private viewContext: ViewContext = "flight";
   private exploreLongitudeDegrees = DEFAULT_SPAWN.longitudeDegrees;
   private exploreLatitudeDegrees = DEFAULT_SPAWN.latitudeDegrees;
@@ -189,6 +209,7 @@ export class SimulationEngine {
       baseLayer: false,
       terrainProvider: new EllipsoidTerrainProvider(),
       requestRenderMode: false,
+      shadows: true,
       msaaSamples: 2,
       contextOptions: {
         webgl: {
@@ -199,6 +220,12 @@ export class SimulationEngine {
       },
     });
     this.viewer = viewer;
+    viewer.shadowMap.size = 1_024;
+    viewer.shadowMap.maximumDistance = 5_000;
+    viewer.shadowMap.darkness = 0.3;
+    viewer.shadowMap.softShadows = false;
+    viewer.shadowMap.fadingEnabled = true;
+    viewer.shadowMap.normalOffset = true;
     viewer.scene.backgroundColor = Color.fromCssColorString("#dfe9ef");
     viewer.scene.globe.baseColor = Color.fromCssColorString("#dbe3e7");
     viewer.scene.screenSpaceCameraController.enableInputs = false;
@@ -273,15 +300,23 @@ export class SimulationEngine {
 
     if (!this.terrain) throw new Error("Terrain sampling could not be initialized.");
     this.daylight = new DaylightSystem(viewer);
+    this.weather = new WeatherSystem(viewer.scene);
+    this.weather.setQuality(this.quality);
     const initialDaylight = this.daylight.update(
       degreesToRadians(DEFAULT_SPAWN.latitudeDegrees),
       degreesToRadians(DEFAULT_SPAWN.longitudeDegrees),
     ) ?? this.daylight.current();
-    this.world.setDaylight(initialDaylight);
+    this.world.setEnvironment({ daylight: initialDaylight, weatherPreset: this.weatherPreset });
     const defaultSpawnPosition = this.spawnGeodetic(DEFAULT_SPAWN);
     await this.terrain.sampleHeight(defaultSpawnPosition);
     if (!this.isActive(viewer, generation)) return;
     this.terrain.reset(DEFAULT_SPAWN.elevationMeters, defaultSpawnPosition);
+    this.weather.updateAnchor(
+      DEFAULT_SPAWN.latitudeDegrees,
+      DEFAULT_SPAWN.longitudeDegrees,
+      this.terrain.current().height,
+      true,
+    );
     try {
       await this.aircraft.initialize(viewer.scene);
       if (!this.isActive(viewer, generation)) {
@@ -297,7 +332,7 @@ export class SimulationEngine {
       throw new Error(`Aircraft model failed to load: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
 
-    this.aircraft.setDaylight(initialDaylight);
+    this.aircraft.setEnvironment({ daylight: initialDaylight, weatherPreset: this.weatherPreset });
     this.aircraft.update(this.flight.state.positionECEF, this.flight.state.bodyToECEF);
     this.sceneCollision = new SceneCollisionSystem(viewer.scene, (picked) => this.world?.isBuildingPick(picked) ?? false);
     this.enterExploreMode();
@@ -314,6 +349,7 @@ export class SimulationEngine {
   }
 
   spawn(request: SpawnRequest): void {
+    this.input.resetTouchControls();
     this.lastSpawn = request;
     const spawnPosition = this.spawnGeodetic(request);
     this.terrain?.reset(request.elevationMeters, spawnPosition);
@@ -331,7 +367,14 @@ export class SimulationEngine {
     this.camera.reset();
     this.sceneCollision?.reset();
     this.accumulator = 0;
+    this.simulationTimeSeconds = 0;
     this.paused = false;
+    this.weather?.updateAnchor(
+      request.latitudeDegrees,
+      request.longitudeDegrees,
+      terrainSample?.height ?? request.elevationMeters,
+      true,
+    );
   }
 
   async spawnAt(request: SpawnRequest): Promise<void> {
@@ -350,10 +393,13 @@ export class SimulationEngine {
 
   enterExploreMode(): void {
     if (!this.viewer) return;
+    this.input.resetTouchControls();
     this.viewContext = "explore";
+    if (this.viewer.scene.skyBox) this.viewer.scene.skyBox.show = true;
     this.audio.setFlightActive(false);
     this.setPaused(true);
     this.aircraft.setVisible(false);
+    this.weather?.setVisible(false);
     this.viewer.camera.cancelFlight();
     const position = ecefToGeodetic(this.flight.state.positionECEF);
     this.exploreLongitudeDegrees = CesiumMath.toDegrees(position.longitude);
@@ -418,8 +464,10 @@ export class SimulationEngine {
   enterFlightMode(resume = true): void {
     if (!this.viewer) return;
     this.viewContext = "flight";
+    if (this.viewer.scene.skyBox) this.viewer.scene.skyBox.show = false;
     this.audio.setFlightActive(true);
     this.aircraft.setVisible(true);
+    this.weather?.setVisible(true);
     this.camera.reset();
     this.camera.update(
       this.viewer.camera,
@@ -437,6 +485,10 @@ export class SimulationEngine {
   respawn(): void {
     this.respawnCount += 1;
     this.spawn(this.lastSpawn);
+    if (this.ringRun) {
+      this.ringRun.restart(this.flight.state.positionECEF);
+      this.ringRenderer.update(0);
+    }
   }
 
   memoryDiagnostics(): RuntimeMemoryDiagnostics | null {
@@ -470,17 +522,72 @@ export class SimulationEngine {
     this.audio.setEnabled(enabled);
   }
 
+  playActivityCue(cue: "start" | "success" | "failure" | "complete"): void {
+    this.audio.playCue(cue);
+  }
+
+  showTrainingGates(gates: readonly TrainingGate[], groundElevationMeters: number): void {
+    if (!this.viewer) return;
+    this.trainingGates.show(this.viewer.scene, gates, groundElevationMeters);
+  }
+
+  updateTrainingGates(activeGateId: string | null, passedGateIds: ReadonlySet<string>): void {
+    this.trainingGates.update(activeGateId, passedGateIds);
+  }
+
+  clearTrainingGates(): void {
+    this.trainingGates.clear(this.viewer?.scene ?? null);
+  }
+
+  async startRingRun(course: RingCourse): Promise<void> {
+    const terrain = this.terrain;
+    const viewer = this.viewer;
+    if (!terrain || !viewer || viewer.isDestroyed()) return;
+    this.stopRingRun();
+    this.clearTrainingGates();
+    const gates = await Promise.all(course.gates.map(async (gate) => {
+      const sample = await terrain.sampleHeight({
+        latitude: degreesToRadians(gate.latitudeDegrees),
+        longitude: degreesToRadians(gate.longitudeDegrees),
+        height: 0,
+      });
+      const groundElevation = sample.reliable ? sample.height : course.spawn.elevationMeters;
+      return resolveRingGate(gate, groundElevation);
+    }));
+    if (this.destroyed || this.terrain !== terrain || this.viewer !== viewer) return;
+    this.ringRun = new RingRunSession(course, gates, this.flight.state.positionECEF);
+    this.ringRenderer.show(viewer.scene, gates);
+    this.accumulator = 0;
+    this.paused = false;
+  }
+
+  stopRingRun(): void {
+    this.ringRun = null;
+    this.ringRenderer.clear(this.viewer?.scene ?? null);
+  }
+
   setDaylightHour(hour: number): void {
     if (!this.daylight) return;
     this.daylight.setHour(hour);
     const position = ecefToGeodetic(this.flight.state.positionECEF);
     const state = this.daylight.update(position.latitude, position.longitude) ?? this.daylight.current();
-    this.applyDaylight(state);
+    this.applyEnvironment(state);
+  }
+
+  setWeatherPreset(preset: WeatherPreset): void {
+    this.weatherPreset = preset;
+    this.weather?.setPreset(preset);
+    this.daylight?.setWeatherPreset(preset);
+    if (!this.daylight) return;
+    const position = ecefToGeodetic(this.flight.state.positionECEF);
+    const state = this.daylight.update(position.latitude, position.longitude) ?? this.daylight.current();
+    this.applyEnvironment(state);
   }
 
   setPaused(paused: boolean): void {
     this.paused = paused;
     this.accumulator = 0;
+    if (paused) this.input.releaseTouchMomentaryControls();
   }
 
   isPaused(): boolean {
@@ -489,6 +596,34 @@ export class SimulationEngine {
 
   cycleCamera(): CameraMode {
     return this.camera.cycle();
+  }
+
+  setTouchAxes(pitch: number, roll: number): void {
+    this.input.setTouchControls({ pitch, roll });
+  }
+
+  setTouchYaw(yaw: number): void {
+    this.input.setTouchControls({ yaw });
+  }
+
+  setTouchThrottle(throttleTarget: number): void {
+    this.input.setTouchControls({ throttleTarget });
+  }
+
+  setTouchBrake(brake: boolean): void {
+    this.input.setTouchControls({ brake });
+  }
+
+  releaseTouchControls(): void {
+    this.input.releaseTouchMomentaryControls();
+  }
+
+  resetTouchControls(): void {
+    this.input.resetTouchControls();
+  }
+
+  cycleFlaps(): void {
+    this.flight.setFlaps((this.flight.state.flaps + 0.5) % 1.5);
   }
 
   showAirportMarkers(airports: readonly Airport[]): void {
@@ -555,7 +690,10 @@ export class SimulationEngine {
     this.viewer?.camera.cancelFlight();
     this.terrain?.destroy();
     if (this.viewer && !this.viewer.isDestroyed()) {
+      this.trainingGates.clear(this.viewer.scene);
+      this.ringRenderer.clear(this.viewer.scene);
       this.aircraft.destroy(this.viewer.scene);
+      this.weather?.destroy();
       this.world?.destroy();
       this.daylight?.destroy();
       this.viewer.destroy();
@@ -566,6 +704,7 @@ export class SimulationEngine {
     this.photorealisticGeocoder = null;
     this.sceneCollision = null;
     this.daylight = null;
+    this.weather = null;
   }
 
   private onFrame = (_scene: Scene): void => {
@@ -581,7 +720,7 @@ export class SimulationEngine {
     this.trackFps(now);
 
     if (this.input.consume("camera")) this.camera.cycle();
-    if (this.input.consume("flaps")) this.flight.setFlaps((this.flight.state.flaps + 0.5) % 1.5);
+    if (this.input.consume("flaps")) this.cycleFlaps();
     if (this.input.consume("respawn")) this.respawn();
     if (this.input.consume("pause")) this.setPaused(!this.paused);
     if (this.input.consume("menu")) {
@@ -591,7 +730,7 @@ export class SimulationEngine {
 
     const geodetic = ecefToGeodetic(this.flight.state.positionECEF);
     const daylightState = this.daylight.update(geodetic.latitude, geodetic.longitude);
-    if (daylightState) this.applyDaylight(daylightState);
+    if (daylightState) this.applyEnvironment(daylightState);
     this.terrain.update(geodetic, now);
     if (now - this.lastTerrainPrefetchTime >= 1_000) {
       this.lastTerrainPrefetchTime = now;
@@ -601,6 +740,11 @@ export class SimulationEngine {
       );
     }
     const terrainSample = this.terrain.current();
+    this.weather?.updateAnchor(
+      CesiumMath.toDegrees(geodetic.latitude),
+      CesiumMath.toDegrees(geodetic.longitude),
+      terrainSample.height,
+    );
     const environment = { groundHeight: terrainSample.height, terrainReliable: terrainSample.reliable };
 
     if (!this.paused && this.viewContext === "flight") {
@@ -610,7 +754,22 @@ export class SimulationEngine {
       while (this.accumulator >= T.fixedStepSeconds && steps < 8) {
         this.previousPositionECEF = { ...this.flight.state.positionECEF };
         this.previousBodyToECEF = { ...this.flight.state.bodyToECEF };
-        this.flight.step(controls, environment, T.fixedStepSeconds);
+        const ringRunPhase = this.ringRun?.snapshot().phase;
+        if (ringRunPhase !== "countdown") this.flight.step(controls, environment, T.fixedStepSeconds);
+        if (this.ringRun) {
+          const stepTelemetry = this.flight.telemetry(environment);
+          const previousSnapshot = this.ringRun.snapshot();
+          this.ringRun.step(
+            this.previousPositionECEF,
+            this.flight.state.positionECEF,
+            T.fixedStepSeconds,
+            stepTelemetry.crashed,
+          );
+          const nextSnapshot = this.ringRun.snapshot();
+          if (nextSnapshot.phase === "complete") this.ringRenderer.update(nextSnapshot.totalGates);
+          else if (nextSnapshot.activeGateIndex !== previousSnapshot.activeGateIndex) this.ringRenderer.update(nextSnapshot.activeGateIndex);
+        }
+        this.simulationTimeSeconds += T.fixedStepSeconds;
         this.accumulator -= T.fixedStepSeconds;
         steps += 1;
       }
@@ -625,7 +784,8 @@ export class SimulationEngine {
     if (buildingSurface) this.flight.reconcileSceneSurface(buildingSurface.height, "building");
 
     const telemetry = this.flight.telemetry(environment);
-    this.audio.update(telemetry, this.paused, this.camera.mode);
+    if (telemetry.crashed) this.input.releaseTouchMomentaryControls();
+    this.audio.update(telemetry, this.paused);
     const interpolation = this.paused ? 1 : clamp(this.accumulator / T.fixedStepSeconds, 0, 1);
     const renderPosition = lerpVec3(this.previousPositionECEF, this.flight.state.positionECEF, interpolation);
     const renderOrientation = slerpQuat(this.previousBodyToECEF, this.flight.state.bodyToECEF, interpolation);
@@ -661,6 +821,7 @@ export class SimulationEngine {
       this.quality = nextQuality;
       this.world?.setQuality(nextQuality);
     }
+    this.weather?.setQuality(this.fps < 30 ? lowerQuality(this.quality) : this.quality);
   }
 
   private emitTelemetry(now: number): void {
@@ -679,17 +840,23 @@ export class SimulationEngine {
       terrainReliable: sample.reliable,
       daylight: this.daylight?.current() ?? {
         localHour: 12,
+        solarElevationRadians: Math.PI / 2,
         daylight: 1,
         horizon: 0,
+        highSun: 1,
         phase: "day",
       },
+      weatherPreset: this.weatherPreset,
+      simulationTimeSeconds: this.simulationTimeSeconds,
+      ringRun: this.ringRun?.snapshot() ?? null,
     });
     this.lastTelemetryTime = now;
   }
 
-  private applyDaylight(state: DaylightState): void {
-    this.world?.setDaylight(state);
-    this.aircraft.setDaylight(state);
+  private applyEnvironment(state: DaylightState): void {
+    const environment = { daylight: state, weatherPreset: this.weatherPreset };
+    this.world?.setEnvironment(environment);
+    this.aircraft.setEnvironment(environment);
   }
 
   private setExploreCamera(): void {

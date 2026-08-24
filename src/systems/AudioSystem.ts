@@ -1,6 +1,5 @@
 import { clamp } from "../flight/math";
 import type { FlightTelemetry } from "../flight/types";
-import type { CameraMode } from "./CameraSystem";
 
 type AudioFlightState = Pick<FlightTelemetry, "airspeedMetersPerSecond" | "throttle" | "grounded" | "crashed" | "landingStatus">;
 
@@ -15,16 +14,14 @@ export type FlightAudioMix = {
 export const flightAudioMix = (
   telemetry: AudioFlightState,
   paused: boolean,
-  cameraMode: CameraMode,
   flightActive: boolean,
 ): FlightAudioMix => {
   const speed = clamp(telemetry.airspeedMetersPerSecond, 0, 95);
   const running = telemetry.crashed || !flightActive ? 0 : 1;
-  const cockpit = cameraMode === "cockpit";
   return {
     engineFrequency: 38 + telemetry.throttle * 74 + speed * 0.12,
-    engineGain: running * (0.055 + telemetry.throttle * 0.085) * (cockpit ? 1.08 : 0.92),
-    windGain: running * Math.pow(speed / 95, 1.55) * (cockpit ? 0.09 : 0.17),
+    engineGain: running * (0.055 + telemetry.throttle * 0.085) * 0.92,
+    windGain: running * Math.pow(speed / 95, 1.55) * 0.17,
     groundGain: running * Number(telemetry.grounded) * clamp(speed / 32, 0, 1) * 0.16,
     masterGain: flightActive ? (paused ? 0.16 : 0.72) : 0,
   };
@@ -74,7 +71,7 @@ export class AudioSystem {
     }
   }
 
-  update(telemetry: FlightTelemetry, paused: boolean, cameraMode: CameraMode): void {
+  update(telemetry: FlightTelemetry, paused: boolean): void {
     if (!this.context || !this.master || !this.enabled) {
       this.previousGrounded = telemetry.grounded;
       this.previousCrashed = telemetry.crashed;
@@ -82,7 +79,7 @@ export class AudioSystem {
     }
 
     const now = this.context.currentTime;
-    const mix = flightAudioMix(telemetry, paused, cameraMode, this.flightActive);
+    const mix = flightAudioMix(telemetry, paused, this.flightActive);
     this.setSmooth(this.master.gain, mix.masterGain, now, 0.08);
     this.setSmooth(this.engineFundamental?.frequency, mix.engineFrequency, now, 0.045);
     this.setSmooth(this.engineHarmonic?.frequency, mix.engineFrequency * 2.02, now, 0.045);
@@ -103,6 +100,34 @@ export class AudioSystem {
   reset(telemetry: FlightTelemetry): void {
     this.previousGrounded = telemetry.grounded;
     this.previousCrashed = telemetry.crashed;
+  }
+
+  playCue(cue: "start" | "success" | "failure" | "complete"): void {
+    if (!this.context || !this.master || !this.enabled || !this.flightActive) return;
+    const context = this.context;
+    const master = this.master;
+    const now = context.currentTime;
+    const notes = cue === "start"
+      ? [440, 554, 659]
+      : cue === "success"
+        ? [659, 880]
+        : cue === "complete"
+          ? [523, 659, 784, 1047]
+          : [220, 174];
+    notes.forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const startsAt = now + index * (cue === "complete" ? 0.1 : 0.12);
+      const duration = cue === "failure" ? 0.18 : 0.11;
+      oscillator.type = cue === "failure" ? "sawtooth" : "sine";
+      oscillator.frequency.setValueAtTime(frequency, startsAt);
+      gain.gain.setValueAtTime(0.0001, startsAt);
+      gain.gain.exponentialRampToValueAtTime(cue === "failure" ? 0.08 : 0.055, startsAt + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startsAt + duration);
+      oscillator.connect(gain).connect(master);
+      oscillator.start(startsAt);
+      oscillator.stop(startsAt + duration + 0.02);
+    });
   }
 
   destroy(): void {

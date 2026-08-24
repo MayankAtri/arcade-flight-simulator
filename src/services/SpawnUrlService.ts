@@ -1,6 +1,7 @@
 import type { Airport } from "../data/types";
 import type { SpawnRequest } from "../flight/types";
 import { FLIGHT_TUNING as T } from "../flight/tuning";
+import type { WeatherPreset } from "../world/types";
 
 const optionalNumber = (value: string | null): number | undefined => {
   if (value === null || value.trim() === "") return undefined;
@@ -47,7 +48,16 @@ export const parseSpawnUrl = (search: string, airportLookup: (code: string) => A
   };
 };
 
-export const updateSpawnUrl = (request: SpawnRequest, airportCode?: string): void => {
+export const parseWeatherPreset = (search: string): WeatherPreset => {
+  const weather = new URLSearchParams(search).get("weather");
+  return weather === "scattered" || weather === "cloudy" ? weather : "clear";
+};
+
+export const updateSpawnUrl = (
+  request: SpawnRequest,
+  airportCode?: string,
+  weatherPreset: WeatherPreset = "clear",
+): void => {
   const params = new URLSearchParams();
   if (new URLSearchParams(location.search).get("world") === "photorealistic") {
     params.set("world", "photorealistic");
@@ -63,5 +73,6 @@ export const updateSpawnUrl = (request: SpawnRequest, airportCode?: string): voi
     params.set("altitude", Math.round(request.airborneAltitudeMeters ?? T.defaultAirborneSpawnAltitudeMeters).toString());
   }
   params.set("mode", request.mode);
+  params.set("weather", weatherPreset);
   history.replaceState(null, "", `${location.pathname}?${params}`);
 };
