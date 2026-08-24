@@ -6,6 +6,7 @@ import {
   EasingFunction,
   EllipsoidTerrainProvider,
   HeightReference,
+  Ion,
   IonGeocodeProviderType,
   LabelStyle,
   Math as CesiumMath,
@@ -195,6 +196,7 @@ export class SimulationEngine {
     const generation = ++this.lifecycleGeneration;
     this.callbacks.onStatus({ phase: "loading", message: "Loading the Cesium world…" });
     const requestedWorld = resolveRequestedWorldMode(window.location.search);
+    if (env.cesiumIonToken) Ion.defaultAccessToken = env.cesiumIonToken;
     const viewer = new Viewer(this.container, {
       animation: false,
       timeline: false,

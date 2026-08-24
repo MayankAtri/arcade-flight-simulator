@@ -122,7 +122,7 @@ export const FLIGHT_TUNING = Object.freeze({
   // Start airborne flights at the Cessna's arcade cruise instead of making the
   // player wait through a slow 70–90 knot acceleration phase.
   airborneSpawnSpeedMetersPerSecond: 62.5,
-  airborneSpawnThrottle: 1,
+  airborneSpawnThrottle: 0.42,
   chaseDistanceMeters: 25,
   chaseHeightMeters: 8,
   chasePositionResponsePerSecond: 3.6,

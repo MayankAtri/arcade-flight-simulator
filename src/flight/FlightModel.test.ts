@@ -79,13 +79,15 @@ describe("flight model", () => {
     expect(model.state.throttle).toBeGreaterThan(0.5);
   });
 
-  it("starts and settles near the intended 120 to 125 knot airborne cruise", () => {
+  it("starts at 120 to 125 knots with the session throttle at 42 percent", () => {
     const model = new FlightModel(SPAWN);
     const spawnAirspeedKnots = model.telemetry(ENVIRONMENT).airspeedMetersPerSecond * 1.943844;
 
     expect(spawnAirspeedKnots).toBeGreaterThanOrEqual(120);
     expect(spawnAirspeedKnots).toBeLessThanOrEqual(125);
-    expect(model.state.throttle).toBe(1);
+    expect(model.state.throttle).toBeCloseTo(0.42, 6);
+
+    model.state.throttle = 1;
 
     runSteps(model, NEUTRAL, 7_200);
 
