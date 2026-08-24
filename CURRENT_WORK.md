@@ -1102,3 +1102,35 @@ git diff --check          PASS for previously tracked changes; full staging repo
 ```
 
 The Vite build retained its existing large-chunk advisory. Google Photorealistic mode remained disabled, and the opt-in memory soak was not run as part of the standard release command.
+
+---
+
+## 2026-08-24 19:46 IST — Cesium sun dark-center artifact removed
+
+Removed the small black dot visible over the rendered sun without changing the approved daylight placement or world-lighting profiles.
+
+### Rendering change
+
+- Disabled Cesium's separate `sunBloom` framebuffer pass during scene initialization.
+- Kept Cesium's built-in sun disc, solar clock/direction, atmosphere scattering, HDR scene rendering, shadows, exposure, weather profiles, terrain lighting, and exterior-aircraft lighting unchanged.
+- The change is intentionally scene-wide, so the same artifact removal applies to Clear, Scattered, and Cloudy weather as well as Sunrise, Noon, and Sunset.
+
+### Push scope
+
+The user requested this fix be committed and pushed after reading the latest handoff. The worktree was clean at the start of this checkpoint and `main` already matched `origin/main` at `f5f02e0` (`Ship complete simulator feature set`).
+
+### Verification at 2026-08-24 20:04 IST
+
+```text
+npm run verify:preflight  PASS
+npm test                  PASS — 29 test files, 148 tests
+npm run build             PASS — TypeScript and Vite production build; 3,323 modules
+npm run verify:postbuild  PASS
+git diff --check          PASS
+live Chrome Sunrise QA    PASS — visible sun has no dark center; placement and scene lighting retained
+browser console           PASS — zero warnings and errors during the visual check
+focused Chromium E2E      PASS — runway/audio/four-camera/pause/respawn scenario, 1.8 minutes
+full E2E first attempt    INCOMPLETE — one final Pause click stability timeout, then the suite was stopped during mobile screenshot capture
+```
+
+The isolated rerun of the timed-out scenario passed after the separate headed visual-QA browser was closed. The first full-suite attempt's mobile scenario had already completed its touch-control interactions and reached portrait screenshot capture when it was interrupted; no source change was made in response. The existing Vite large-chunk advisory remains unchanged. Google Photorealistic mode and the opt-in memory soak were not run.
