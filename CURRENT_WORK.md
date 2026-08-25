@@ -1134,3 +1134,36 @@ full E2E first attempt    INCOMPLETE — one final Pause click stability timeout
 ```
 
 The isolated rerun of the timed-out scenario passed after the separate headed visual-QA browser was closed. The first full-suite attempt's mobile scenario had already completed its touch-control interactions and reached portrait screenshot capture when it was interrupted; no source change was made in response. The existing Vite large-chunk advisory remains unchanged. Google Photorealistic mode and the opt-in memory soak were not run.
+
+---
+
+## 2026-08-25 20:01 IST — actual sun black-dot cause fixed
+
+Corrected the remaining black dot after verifying that the earlier `sunBloom` change had been committed, pushed, and successfully deployed.
+
+### Root cause and rendering change
+
+- Production Vercel deployment `6069836343` successfully serves Git revision `9ad48d40e88181929f953d5584af8a9446ba7a95`, which contains the earlier `4eba469` bloom change. The issue was therefore not a missed push or stale deployment.
+- The deterministic daylight anchor is `2026-08-12`, the date of a real total solar eclipse. Cesium was rendering its separate Moon primitive after the Sun, creating the sharp black disc inside or near the sun halo depending on location and selected daylight preset.
+- Disabled only `viewer.scene.moon.show` during scene initialization. The Sun primitive, deterministic date, geographic sun direction, HDR, atmosphere, exposure, shadows, weather, Google Photorealistic lighting, Cesium/OSM lighting, and aircraft lighting remain unchanged.
+- Kept the earlier `sunBloom = false` setting in place.
+
+### Matching production/local visual QA
+
+- Reproduced the production defect at Madrid Sunset in Google Photorealistic mode, heading approximately 276 degrees and pitched up approximately 17 degrees: the black Moon disc was clearly visible inside the sun halo.
+- Repeated the same local Google Photorealistic setup after the fix: the sun halo and bright center remained, with no black disc.
+- The fixed eclipse-day ephemeris at the Madrid Sunset checkpoint placed the Moon approximately 0.9 degrees from the Sun, consistent with the observed artifact.
+- Both the production reproduction and corrected local pass reported zero browser console errors.
+
+### Verification at 2026-08-25 20:01 IST
+
+```text
+npm run verify:preflight  PASS
+npm test                  PASS — 30 test files, 152 tests
+npm run build             PASS — TypeScript and Vite production build; 3,324 modules
+npm run verify:postbuild  PASS
+matching visual QA        PASS — production Moon disc reproduced; corrected local sun is clean
+browser console           PASS — zero errors in both comparison states
+```
+
+The existing Vite large-chunk advisory remains unchanged. The worktree already contained newer uncommitted production-readiness and documentation changes before this fix; they were preserved and are not part of this checkpoint's intended commit.

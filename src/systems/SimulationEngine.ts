@@ -239,6 +239,7 @@ export class SimulationEngine {
     viewer.scene.fog.heightFalloff = 0.5;
     viewer.scene.highDynamicRange = true;
     viewer.scene.sunBloom = false;
+    if (viewer.scene.moon) viewer.scene.moon.show = false;
     viewer.scene.postProcessStages.fxaa.enabled = true;
     viewer.scene.globe.showGroundAtmosphere = true;
     if (viewer.scene.skyAtmosphere) {
