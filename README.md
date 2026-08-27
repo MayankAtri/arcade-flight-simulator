@@ -89,9 +89,9 @@ Takeoff and geographic waypoint progress are automatic. A landing leg completes 
 - Terrain samples are prefetched along the velocity path and stored in a bounded cache for smoother AGL and collision behavior during tile loading.
 - Distant city transitions release no-longer-selected OSM tiles and briefly reduce the terrain cache after the destination renders; local respawns remain cache-friendly.
 
-## Photorealistic evaluation lock
+## Photorealistic production world
 
-Google Photorealistic 3D Tiles were evaluated once through Cesium ion at Mumbai and are off by default. Both conditions are required to load them: `VITE_ENABLE_PHOTOREALISTIC_EVALUATION=true` at build time and `?world=photorealistic` in the URL. With the documented default `false`, even a retained test URL resolves to the normal Cesium World Terrain, imagery, and OSM Buildings provider. The evaluation provider keeps Cesium World Terrain separate for flight collision, disables tileset collision, uses the Google geocoder, displays required attribution, and applies conservative memory limits.
+When `VITE_ENABLE_PHOTOREALISTIC_EVALUATION=true` at build time, Google Photorealistic 3D Tiles through Cesium ion are the default world. Add `?world=cesium` to force Cesium World Terrain, aerial imagery, and OSM Buildings instead. The documented local-development default remains `false` to avoid accidental root-tile quota usage. The photorealistic provider keeps Cesium World Terrain separate for flight collision, disables tileset collision, uses the Google geocoder, displays required attribution, and applies conservative memory limits.
 
 ## Aircraft asset
 

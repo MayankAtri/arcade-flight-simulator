@@ -10,5 +10,6 @@ const evaluationEnabled = import.meta.env.VITE_ENABLE_PHOTOREALISTIC_EVALUATION 
 
 export const resolveRequestedWorldMode = (search: string, enabled = evaluationEnabled): WorldMode => {
   const requested = new URLSearchParams(search).get("world")?.toLocaleLowerCase();
-  return enabled && requested === "photorealistic" ? "photorealistic" : "cesium";
+  if (!enabled) return "cesium";
+  return requested === "cesium" ? "cesium" : "photorealistic";
 };

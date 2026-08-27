@@ -2,12 +2,27 @@ import {
   createGooglePhotorealistic3DTileset,
   createWorldTerrainAsync,
   Ion,
+  ShadowMode,
   type Cesium3DTileset,
   type TerrainProvider,
   type Viewer,
 } from "cesium";
 import type { EnvironmentVisualState, WorldMemoryStats, WorldQuality, WorldVisualProvider } from "./types";
 import { calculateEnvironmentVisualProfile } from "./DaylightSystem";
+
+export const GOOGLE_PHOTOREALISTIC_TILESET_OPTIONS = {
+  showCreditsOnScreen: true,
+  enableCollision: false,
+  shadows: ShadowMode.DISABLED,
+  cacheBytes: 192 * 1_024 * 1_024,
+  maximumCacheOverflowBytes: 96 * 1_024 * 1_024,
+  maximumScreenSpaceError: 20,
+  dynamicScreenSpaceError: true,
+  foveatedScreenSpaceError: true,
+  cullRequestsWhileMoving: true,
+  preloadFlightDestinations: false,
+  progressiveResolutionHeightFraction: 0.3,
+} as const;
 
 export class GoogleWorldProvider implements WorldVisualProvider {
   readonly label = "Google photorealistic · Cesium ion";
@@ -28,18 +43,7 @@ export class GoogleWorldProvider implements WorldVisualProvider {
       createWorldTerrainAsync({ requestVertexNormals: true, requestWaterMask: false }),
       createGooglePhotorealistic3DTileset(
         { onlyUsingWithGoogleGeocoder: true },
-        {
-          showCreditsOnScreen: true,
-          enableCollision: false,
-          cacheBytes: 192 * 1_024 * 1_024,
-          maximumCacheOverflowBytes: 96 * 1_024 * 1_024,
-          maximumScreenSpaceError: 20,
-          dynamicScreenSpaceError: true,
-          foveatedScreenSpaceError: true,
-          cullRequestsWhileMoving: true,
-          preloadFlightDestinations: false,
-          progressiveResolutionHeightFraction: 0.3,
-        },
+        GOOGLE_PHOTOREALISTIC_TILESET_OPTIONS,
       ),
     ]);
 

@@ -34,6 +34,7 @@ import { CesiumWorldProvider } from "../world/CesiumWorldProvider";
 import { DaylightSystem } from "../world/DaylightSystem";
 import { GoogleWorldProvider } from "../world/GoogleWorldProvider";
 import { resolveRequestedWorldMode } from "../world/resolveWorldMode";
+import { hasRenderableWorld, hasSettledWorld } from "../world/sceneReadiness";
 import { TerrainSamplingSystem } from "../world/TerrainSamplingSystem";
 import type { DaylightState, WeatherPreset, WorldQuality, WorldVisualProvider } from "../world/types";
 import { WeatherSystem } from "../world/WeatherSystem";
@@ -450,19 +451,26 @@ export class SimulationEngine {
   }
 
   async prepareFlight(request: SpawnRequest): Promise<void> {
-    await Promise.all([
-      this.spawnAt(request).then(() => this.setPaused(true)),
-      this.waitForSceneTiles(),
-    ]);
-    if (this.destroyed) return;
-    if (this.pendingDistantTransition) {
+    try {
+      this.viewContext = "transition";
+      this.audio.setFlightActive(false);
+      this.aircraft.setVisible(false);
+      this.weather?.setVisible(false);
+      this.setPaused(true);
+      await this.spawnAt(request);
+      if (this.destroyed) return;
+      this.setPaused(true);
+      this.positionFlightCamera();
       await this.waitForDestinationRender();
-      if (!this.destroyed) {
+      if (this.destroyed) return;
+      if (this.pendingDistantTransition) {
         this.world?.releaseUnusedResources();
         this.resourceReleaseCount += 1;
       }
+      await this.waitForSceneTiles();
+    } finally {
+      this.pendingDistantTransition = false;
     }
-    this.pendingDistantTransition = false;
   }
 
   enterFlightMode(resume = true): void {
@@ -472,17 +480,7 @@ export class SimulationEngine {
     this.audio.setFlightActive(true);
     this.aircraft.setVisible(true);
     this.weather?.setVisible(true);
-    this.camera.reset();
-    this.camera.update(
-      this.viewer.camera,
-      this.flight.state.positionECEF,
-      this.flight.state.bodyToECEF,
-      this.flight.telemetry({
-        groundHeight: this.terrain?.current().height ?? this.lastSpawn.elevationMeters,
-        terrainReliable: this.terrain?.current().reliable ?? false,
-      }).airspeedMetersPerSecond,
-      1,
-    );
+    this.positionFlightCamera();
     this.setPaused(!resume);
   }
 
@@ -612,6 +610,10 @@ export class SimulationEngine {
 
   setTouchThrottle(throttleTarget: number): void {
     this.input.setTouchControls({ throttleTarget });
+  }
+
+  setFlightThrottle(throttle: number): void {
+    this.flight.setThrottle(throttle);
   }
 
   setTouchBrake(brake: boolean): void {
@@ -881,11 +883,33 @@ export class SimulationEngine {
     });
   }
 
+  private positionFlightCamera(): void {
+    if (!this.viewer) return;
+    this.camera.reset();
+    this.camera.update(
+      this.viewer.camera,
+      this.flight.state.positionECEF,
+      this.flight.state.bodyToECEF,
+      this.flight.telemetry({
+        groundHeight: this.terrain?.current().height ?? this.lastSpawn.elevationMeters,
+        terrainReliable: this.terrain?.current().reliable ?? false,
+      }).airspeedMetersPerSecond,
+      1,
+    );
+    this.viewer.scene.requestRender();
+  }
+
   private async waitForSceneTiles(): Promise<void> {
     this.cancelSceneReadinessWait();
     const startedAt = performance.now();
-    const minimumDelayMs = 1_600;
-    const maximumDelayMs = 4_200;
+    const minimumDelayMs = 1_800;
+    const settledWindowMs = 650;
+    const renderableFallbackDelayMs = 10_000;
+    const renderableWindowMs = 1_250;
+    const maximumDelayMs = 30_000;
+    let settledSince: number | null = null;
+    let renderableSince: number | null = null;
+    let timedOut = false;
     await new Promise<void>((resolve) => {
       let settled = false;
       const finish = () => {
@@ -898,21 +922,47 @@ export class SimulationEngine {
       };
       this.resolveSceneReadiness = finish;
       const inspect = () => {
-        const elapsed = performance.now() - startedAt;
+        const now = performance.now();
+        const elapsed = now - startedAt;
         const viewer = this.viewer;
-        if (!viewer || viewer.isDestroyed()) {
+        const world = this.world;
+        if (!viewer || viewer.isDestroyed() || !world) {
           finish();
           return;
         }
-        const globeReady = !viewer.scene.globe.show || viewer.scene.globe.tilesLoaded;
-        if ((elapsed >= minimumDelayMs && globeReady) || elapsed >= maximumDelayMs) {
+        const snapshot = {
+          globeVisible: viewer.scene.globe.show,
+          globeTilesLoaded: viewer.scene.globe.tilesLoaded,
+          world: world.memoryStats(),
+        };
+        if (hasRenderableWorld(snapshot)) renderableSince ??= now;
+        else renderableSince = null;
+        if (hasSettledWorld(snapshot)) settledSince ??= now;
+        else settledSince = null;
+
+        const settledReady = elapsed >= minimumDelayMs
+          && settledSince !== null
+          && now - settledSince >= settledWindowMs;
+        const renderableReady = elapsed >= renderableFallbackDelayMs
+          && renderableSince !== null
+          && now - renderableSince >= renderableWindowMs;
+        if (settledReady || renderableReady) {
           finish();
           return;
         }
+        if (elapsed >= maximumDelayMs) {
+          timedOut = true;
+          finish();
+          return;
+        }
+        viewer.scene.requestRender();
         this.sceneReadinessFrameId = requestAnimationFrame(inspect);
       };
       inspect();
     });
+    if (timedOut && !this.destroyed) {
+      throw new Error("The world did not finish loading. Check your connection and try this flight again.");
+    }
   }
 
   private waitForDestinationRender(): Promise<void> {

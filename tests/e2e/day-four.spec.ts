@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("starts on a runway, exposes ground state, pauses, and respawns", async ({ page }) => {
   test.setTimeout(180_000);
-  await page.goto("/?airport=OMDB&mode=runway");
+  await page.goto("/?world=cesium&airport=OMDB&mode=runway");
   await expect(page.getByLabel("Interactive 3D flight world").locator("canvas")).toBeVisible();
   await expect(page.getByLabel("Development flight telemetry")).toContainText("GROUND", { timeout: 60_000 });
 

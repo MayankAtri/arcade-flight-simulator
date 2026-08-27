@@ -38,6 +38,15 @@ describe("Flight School syllabus", () => {
     expect(stepIds.indexOf("approach-2")).toBe(stepIds.indexOf("turn-final") + 1);
   });
 
+  it("starts airborne lessons at full power without changing free-flight spawn tuning", () => {
+    const runwayLesson = FLIGHT_LESSONS.find((lesson) => lesson.spawn.mode === "runway")!;
+    const airborneLessons = FLIGHT_LESSONS.filter((lesson) => lesson.spawn.mode === "air");
+
+    expect(runwayLesson.initialThrottle).toBe(0);
+    expect(airborneLessons).toHaveLength(4);
+    expect(airborneLessons.every((lesson) => lesson.initialThrottle === 1)).toBe(true);
+  });
+
   it("places the First Flight departure gates beyond the takeoff and climb segment", () => {
     const firstFlight = FLIGHT_LESSONS.find((lesson) => lesson.id === "first-flight")!;
     const departureGates = firstFlight.gates.filter((gate) => gate.id.startsWith("departure-"));

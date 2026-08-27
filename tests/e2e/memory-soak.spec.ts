@@ -30,7 +30,7 @@ test("records two deterministic world-transition laps without unbounded retained
   test.skip(process.env.RUN_MEMORY_SOAK !== "1", "Run explicitly with npm run test:memory.");
   test.setTimeout(8 * 60_000);
 
-  await page.goto("/?debugMemory=1");
+  await page.goto("/?world=cesium&debugMemory=1");
   await expect(page.getByRole("heading", { name: "Choose the world" })).toBeVisible({ timeout: 60_000 });
   await expect.poll(() => page.evaluate(() => Boolean(window.__flightSimulatorMemory))).toBe(true);
 

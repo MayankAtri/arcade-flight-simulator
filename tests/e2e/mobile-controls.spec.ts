@@ -11,7 +11,7 @@ test("provides landscape touch flight controls and pauses safely in portrait", a
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
-  await page.goto("/?airport=OMDB&mode=air&heading=121&altitude=304.8");
+  await page.goto("/?world=cesium&airport=OMDB&mode=air&heading=121&altitude=304.8");
   const controls = page.getByLabel("Touch flight controls");
   await expect(controls).toBeVisible({ timeout: 90_000 });
   await expect(page.getByLabel("Mobile flight telemetry")).toBeVisible();
@@ -68,7 +68,7 @@ test("provides landscape touch flight controls and pauses safely in portrait", a
   await page.getByRole("button", { name: "Respawn" }).click();
   await expect(controls).not.toHaveClass(/is-disabled/);
   await expect(page.getByLabel("Development flight telemetry")).toContainText("AIRBORNE");
-  await expect(throttle).toHaveAttribute("aria-valuenow", "100");
+  await expect(throttle).toHaveAttribute("aria-valuenow", "42");
   await page.screenshot({ path: "output/playwright/mobile-controls-landscape.png" });
 
   const brake = page.getByRole("button", { name: "Hold wheel brakes" });

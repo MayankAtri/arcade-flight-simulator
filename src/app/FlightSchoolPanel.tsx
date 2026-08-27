@@ -30,7 +30,7 @@ export function FlightSchoolPanel({
       <header className="flight-school-hero">
         <div>
           <span className="flight-school-kicker"><GraduationCap size={16} aria-hidden="true" /> Cessna 172SP training</span>
-          <h2>Learn to fly.<br />One skill at a time.</h2>
+          <h2>Learn to <span>fly.</span><br />One skill at a time.</h2>
           <p>Five guided lessons use the simulator’s current {touchControls ? "touch controls" : "keyboard controls"} and flight model, from first takeoff to a complete landing.</p>
         </div>
         <div className="flight-school-progress" aria-label={`${completedCount} of ${FLIGHT_LESSONS.length} lessons complete`}>

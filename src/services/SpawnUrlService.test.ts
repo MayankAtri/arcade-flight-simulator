@@ -54,4 +54,14 @@ describe("shareable spawn URLs", () => {
     const url = replaceState.mock.calls[0][2] as string;
     expect(parseWeatherPreset(url.slice(url.indexOf("?")))).toBe("cloudy");
   });
+
+  it("preserves an explicit world override in share URLs", () => {
+    const replaceState = vi.fn();
+    vi.stubGlobal("location", { pathname: "/", search: "?world=cesium" });
+    vi.stubGlobal("history", { replaceState });
+    const spawn = parseSpawnUrl("?lat=40.71273&lon=-74.00602&mode=air", findAirport)!;
+    updateSpawnUrl(spawn);
+    const url = replaceState.mock.calls[0][2] as string;
+    expect(new URL(url, "https://example.test").searchParams.get("world")).toBe("cesium");
+  });
 });

@@ -59,9 +59,8 @@ export const updateSpawnUrl = (
   weatherPreset: WeatherPreset = "clear",
 ): void => {
   const params = new URLSearchParams();
-  if (new URLSearchParams(location.search).get("world") === "photorealistic") {
-    params.set("world", "photorealistic");
-  }
+  const currentWorld = new URLSearchParams(location.search).get("world");
+  if (currentWorld === "photorealistic" || currentWorld === "cesium") params.set("world", currentWorld);
   if (airportCode) params.set("airport", airportCode);
   else {
     params.set("lat", request.latitudeDegrees.toFixed(5));

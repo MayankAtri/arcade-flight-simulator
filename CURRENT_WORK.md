@@ -1167,3 +1167,83 @@ browser console           PASS — zero errors in both comparison states
 ```
 
 The existing Vite large-chunk advisory remains unchanged. The worktree already contained newer uncommitted production-readiness and documentation changes before this fix; they were preserved and are not part of this checkpoint's intended commit.
+
+---
+
+## 2026-08-26 23:38 IST — Google Photorealistic building-shadow flicker stabilized
+
+Removed the slight building-shadow shimmer reported during flight after correcting the visual audit to use actual Google Photorealistic 3D Tiles rather than the Cesium/OSM fallback.
+
+### Root cause and rendering change
+
+- Cesium enables dynamic cast-and-receive shadows for a 3D tileset by default. Google Photorealistic textures already contain photographed building shadows, so the additional live shadow-map pass could shimmer as streamed photogrammetry changed level of detail during camera movement.
+- Set only the Google Photorealistic tileset to `ShadowMode.DISABLED`. The photographed shadows, daylight direction, image-based lighting, environment brightness/saturation, atmosphere, weather, aircraft shadows, and the Cesium/OSM provider remain unchanged.
+- Extracted the Google tileset initialization options into a tested constant so the no-dynamic-shadow requirement cannot silently regress.
+
+### Google-specific visual QA
+
+- Started a separate local Vite server with `VITE_ENABLE_PHOTOREALISTIC_EVALUATION=true` and confirmed the runtime label and Google attribution before judging the result.
+- Checked active External flight over New York at Noon around 1,000 ft AGL, then repeated at Sunset and lower altitude where building contrast is stronger.
+- Building textures retained their photographed light and shadow detail without the extra live-shadow shimmer. The Noon pass settled around 50–59 FPS; the close Sunset pass entered fresh dense-city streaming and is not treated as a settled performance result.
+- Browser console reported zero errors. The single warning was Cesium's existing evaluation-access-token notice.
+
+### Verification at 2026-08-26 23:38 IST
+
+```text
+npm test                  PASS — 31 test files, 153 tests
+npm run verify:preflight PASS
+npm run build             PASS — TypeScript and Vite production build; 3,324 modules
+npm run verify:postbuild PASS
+git diff --check          PASS
+Google Noon active flight PASS — actual Google attribution/provider confirmed; stable photographed building shadows
+Google Sunset flight      PASS — low-sun building detail retained without the dynamic tileset shadow pass
+browser console           PASS — zero errors; one existing Cesium evaluation-token warning
+```
+
+The existing Vite large-chunk advisory remains unchanged. No Cesium/OSM shadow behavior, lighting profile, weather, camera, physics, audio, deployment, commit, push, destructive cleanup, or unrelated dirty-worktree change was included.
+
+---
+
+## 2026-08-27 20:35 IST — Cesium Flight School production regression and throttle fix
+
+Re-audited Flight School after reports of production problems. At the user's direction, the final investigation and acceptance used only Cesium World through the explicit `?world=cesium` route. No Google Photorealistic source change is included in this checkpoint.
+
+### Confirmed production defect
+
+- All five production lessons launched successfully in Cesium World with their correct runway/airborne state and first tracker objective.
+- `Straight and Level` exposed a real teaching-sequence regression: the released 42% airborne free-flight throttle let the lesson advance through `Hold altitude`, `Hold heading`, `Set cruise speed`, and `Change the power` without player input. The `Reduce the throttle below 70%` objective was already true at spawn, and airspeed decayed from 120 knots toward 70 knots before the final restore-power instruction.
+- The regression came from commit `9ad48d4` changing the global airborne spawn throttle from 100% to 42%. The free-flight setting itself remains intentional and unchanged.
+
+### Flight School fix
+
+- Added an authored initial throttle to every Flight School lesson.
+- First Flight retains 0% throttle on the runway.
+- Straight and Level, Controlled Turns, Stall and Recovery, and Approach and Landing now start at 100% lesson power, restoring their accepted teaching sequence without changing free-flight, mobile free-flight, Ring Runs, Challenges, physics tuning, or Cesium provider behavior.
+- The engine applies the lesson throttle through a bounded FlightModel setter immediately after the lesson spawn is prepared.
+- Added regression coverage for the five lesson throttle assignments and setter clamping.
+
+### Live Cesium acceptance
+
+- Production Cesium launch sweep: PASS for all five lessons; every URL retained `world=cesium`, First Flight entered GROUND, and the other four entered AIRBORNE.
+- Corrected local Cesium launch sweep: PASS for all five lessons; First Flight reported 0% throttle and every airborne lesson reported 100% throttle.
+- Straight and Level: completed start to finish with real keyboard input. The corrected run waited at `Set cruise speed` until Control was used, then required Shift to restore power, showed `Lesson complete`, and persisted `straight-and-level` across reload in versioned local storage.
+- First Flight: used real keyboard input to complete the brake check, release brakes, set takeoff power, accelerate past 55 knots, rotate, and reach Positive climb. An intentional terrain impact produced `Lesson interrupted`; Restart Lesson returned to `Check the brakes`, GROUND, 0 knots, and 0% throttle.
+- Landscape visual check at 844 x 390: the compact lesson tracker remained between the left and right telemetry stacks and kept the attitude indicator and controls reachable.
+- Production and local browser consoles both reported zero errors.
+- The existing deterministic evaluator completed all five lessons and all 41 authored steps, including gate, landing, failure, checkpoint, and persistence branches.
+
+### Verification at 2026-08-27 20:35 IST
+
+```text
+npm test -- --run          PASS — 31 test files, 155 tests
+npm run build              PASS — TypeScript and Vite production build; 3,324 modules
+git diff --check           PASS
+production Cesium launches PASS — 5/5 lessons, correct initial states and objectives
+local Cesium launches      PASS — 5/5 lessons, authored throttle applied
+Straight and Level live    PASS — completed with real keyboard inputs; progress persisted
+First Flight live          PASS — brake/takeoff/rotation plus failure/restart path
+browser console            PASS — zero errors in production and local Cesium runs
+full Chromium E2E          PARTIAL — 3 passed, 2 failed, 1 opt-in memory test skipped
+```
+
+The broader E2E failures are recorded separately from Flight School acceptance. `mobile-controls.spec.ts` still expects a free-flight respawn throttle of 100%, but released free-flight tuning intentionally returns 42%; this stale unrelated assertion was not changed. The streamed OSM-building recovery test timed out on its second Cesium page initialization both in the full suite and alone, while all five Flight School launches and repeated lesson transitions succeeded live. The production Flight School regression remains present until this local fix is explicitly shipped. No commit, push, deployment, destructive cleanup, Google Photorealistic acceptance, Ring Runs change, or unrelated dirty-worktree change was performed.

@@ -13,3 +13,5 @@ output
 # GLB and its attribution live in public/assets/aircraft.
 free_cessna_172sp.glb
 free_cessna_172sp/
+.vercel
+.env*

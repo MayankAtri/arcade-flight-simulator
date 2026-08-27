@@ -56,6 +56,10 @@ export class FlightModel {
     this.state.flaps = clamp(value, 0, 1);
   }
 
+  setThrottle(value: number): void {
+    this.state.throttle = clamp(value, 0, 1);
+  }
+
   reconcileSceneSurface(surfaceHeight: number, kind: "terrain" | "building"): void {
     if (this.state.crashed || !Number.isFinite(surfaceHeight)) return;
     if (kind === "building") {

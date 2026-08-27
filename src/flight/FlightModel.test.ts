@@ -66,6 +66,14 @@ describe("flight model", () => {
     expect(model.state.throttle).toBeGreaterThan(0.99);
   });
 
+  it("applies a bounded authored activity throttle", () => {
+    const model = new FlightModel(SPAWN);
+    model.setThrottle(1.2);
+    expect(model.state.throttle).toBe(1);
+    model.setThrottle(-0.2);
+    expect(model.state.throttle).toBe(0);
+  });
+
   it("approaches a touch throttle target at the existing throttle rate", () => {
     const model = new FlightModel(SPAWN);
     model.state.throttle = 0;

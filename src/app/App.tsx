@@ -273,15 +273,22 @@ function App() {
         const urlWeather = parseWeatherPreset(window.location.search);
         engine.setWeatherPreset(urlWeather);
         const initialSpawn = urlSpawn ?? DEFAULT_AIRBORNE_SPAWN;
-        await engine.spawnAt(initialSpawn);
-        if (cancelled) return;
-        setMobileControlResetKey((value) => value + 1);
         if (urlSpawn) {
+          setFlightTransition({ phase: "loading", label: "Shared flight location" });
+          try {
+            await engine.prepareFlight(initialSpawn);
+          } finally {
+            if (!cancelled) setFlightTransition({ phase: "idle", label: "" });
+          }
+          if (cancelled) return;
           engine.enterFlightMode(true);
           setShowBriefing(false);
         } else {
+          await engine.spawnAt(initialSpawn);
+          if (cancelled) return;
           engine.enterExploreMode();
         }
+        setMobileControlResetKey((value) => value + 1);
       })
       .catch((error) => {
         if (cancelled) return;
@@ -548,6 +555,7 @@ function App() {
     engineRef.current?.setWeatherPreset("clear");
     const started = await startFlight(lesson.spawn, `${lesson.title} · Flight School`, undefined, "clear");
     if (!started) return;
+    engineRef.current?.setFlightThrottle(lesson.initialThrottle);
     setActivity(startActivity("lesson", lesson.id));
     engineRef.current?.showTrainingGates(lesson.gates, lesson.spawn.elevationMeters);
     engineRef.current?.playActivityCue("start");
@@ -1281,7 +1289,7 @@ function App() {
               <p>{flightTransition.label}</p>
               <div className="flight-loading-card__status">
                 <LoaderCircle size={16} aria-hidden="true" />
-                <span>Streaming terrain and airport data</span>
+                <span>Loading terrain, imagery, and 3D scenery</span>
               </div>
               <div className="flight-loading-card__progress" aria-hidden="true"><span /></div>
             </div>

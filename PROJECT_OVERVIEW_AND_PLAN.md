@@ -1,6 +1,6 @@
 # Arcade Flight Simulator — Project Overview, Current State, and Continuation Plan
 
-Last updated: **2026-08-24 (Asia/Kolkata)**  
+Last updated: **2026-08-25 (Asia/Kolkata)**
 Repository: `/Users/mayankatri/Projects/Flight SImulator `  
 GitHub remote: `https://github.com/MayankAtri/arcade-flight-simulator.git`
 
@@ -10,7 +10,7 @@ GitHub remote: `https://github.com/MayankAtri/arcade-flight-simulator.git`
 
 ## 1. Project in one paragraph
 
-Arcade Flight Simulator is a desktop-browser flight game built with React, TypeScript, Vite, and CesiumJS. It places a flyable Cessna-style aircraft anywhere on a continuous 3D globe, supports runway and airborne starts, and provides deliberately arcade-oriented but physically coherent takeoff, flight, maneuver, landing, crash, and respawn behavior. The production direction is **Cesium-first**: Cesium World Terrain, aerial imagery, and Cesium OSM Buildings are the normal world. Google Photorealistic 3D Tiles are an optional, guarded evaluation mode and are not required for development, presentation, or future deployment.
+Arcade Flight Simulator is a desktop-browser flight game built with React, TypeScript, Vite, and CesiumJS. It places a flyable Cessna-style aircraft anywhere on a continuous 3D globe, supports runway and airborne starts, and provides deliberately arcade-oriented but physically coherent takeoff, flight, maneuver, landing, crash, and respawn behavior. The production Vercel build now uses Google Photorealistic 3D Tiles through Cesium ion by default. Cesium World Terrain, aerial imagery, and Cesium OSM Buildings remain available through `?world=cesium` and remain the fallback when Google/Cesium ion assets fail.
 
 The intended feel is:
 
@@ -67,9 +67,7 @@ These features are intentionally outside the present commitment unless the user 
 - Detailed airport/runway meshes and airport infrastructure.
 - Realistic building interiors.
 - Real-time circumnavigation as an acceptance requirement.
-- Production Google Maps dependency.
 - Automatic time cycling or night flight.
-- Deployment to Vercel or another host.
 
 Free flight now includes deliberate Clear, Scattered, and Cloudy visual presets. They use Cesium's native procedural noise clouds rather than the removed repeated raster-billboard experiment. The presets do not add wind, turbulence, rain, wet surfaces, collision, or cloud shadows.
 
@@ -77,34 +75,23 @@ Free flight now includes deliberate Clear, Scattered, and Cloudy visual presets.
 
 ## 4. Important product decisions
 
-### Cesium is the default world
+### Production world selection
 
-The normal simulator uses:
-
-- CesiumJS.
-- Cesium World Terrain with vertex normals and water masks.
-- Cesium world/aerial imagery.
-- Cesium OSM Buildings.
-
-Google Photorealistic 3D Tiles were evaluated and are still implemented behind a strict opt-in. They are not the default and should not be loaded casually because the account has a limited monthly root-tile quota.
-
-### Google mode is evaluation-only
-
-Google mode loads only when both conditions are true:
+The production Vercel environment sets:
 
 ```env
 VITE_ENABLE_PHOTOREALISTIC_EVALUATION=true
 ```
 
-and the URL contains:
+When that build-time flag is enabled, Google Photorealistic 3D Tiles through Cesium ion are the default. Use this explicit override to select the standard Cesium world:
 
 ```text
-?world=photorealistic
+?world=cesium
 ```
 
-With the normal environment value of `false`, even a URL containing `world=photorealistic` resolves to the standard Cesium world. Do not turn this flag on or browse Google mode unless the user explicitly requests it.
+Local development keeps the flag `false` by default to protect the limited root-tile quota. With the flag disabled, every URL resolves to Cesium World Terrain, aerial imagery, and Cesium OSM Buildings. Basic World remains the asset/network failure fallback.
 
-Google mode uses Google location search through Cesium ion, keeps Cesium World Terrain separately for terrain collision, disables tileset collision, and shows required attribution. The lighting system affects Google tiles through Cesium scene light and image-based/environment lighting, but shadows and illumination baked into photographed Google textures cannot be removed completely.
+Google mode uses Google location search through Cesium ion, keeps Cesium World Terrain separately for terrain collision, disables tileset collision, and shows required attribution. The lighting system affects Google tiles through Cesium scene light and image-based/environment lighting, but shadows and illumination baked into photographed Google textures cannot be removed completely. Both providers wait behind the loading transition until destination scenery is renderable before flight resumes.
 
 ### Global coordinates are ECEF, not a fixed city origin
 
@@ -532,7 +519,7 @@ Shareable URLs support:
 - `heading`.
 - `altitude` for airborne starts, in meters.
 - `mode=runway` or `mode=air`.
-- Optional guarded `world=photorealistic`.
+- Optional `world=cesium` override when the production photorealistic flag is enabled.
 
 Example Dubai airborne checkpoint:
 
@@ -816,6 +803,7 @@ The committed application includes the Cesium-first simulator, four exterior cam
 - The ready-state HUD clamps invalid or negative displayed heights to zero without changing flight physics.
 - Explore uses the three-column World Flight Sim-inspired layout documented in `design-qa.md`.
 - Menu/Explore/loading states fully silence flight audio; actual paused flight retains its quieter audio mix.
+- As of 2026-08-25, the production Vercel flag makes Google Photorealistic the default world; `?world=cesium` is the explicit Cesium/OSM override, and both routes use the destination-scene readiness gate before flight begins.
 
 ### Current uncommitted work
 
@@ -833,7 +821,7 @@ The implementation plan is preserved separately in `FLIGHT_SCHOOL_AND_RING_RUNS_
 
 1. Read this overview, then `CURRENT_WORK.md`, then inspect `git status`.
 2. Preserve all unrelated modified and untracked files.
-3. Keep Cesium as the default world and Google Photorealistic mode explicitly opt-in.
+3. Keep Google Photorealistic as the production default while the Vercel feature flag is enabled; preserve `?world=cesium` and Basic World as the explicit and failure fallbacks.
 4. Keep daylight fixed to Sunrise/Noon/Sunset, keep weather visual-only and free-flight-selected, do not restore raster billboard clouds, and do not autoplay the GLB door animation.
 5. Do not commit, push, deploy, reset, clean, or discard work unless the user explicitly requests it.
 6. Treat historical verification counts as snapshots; rerun the current repository commands before making a new release claim.

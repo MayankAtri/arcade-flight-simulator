@@ -30,6 +30,7 @@ export type FlightLesson = {
   difficulty: LessonDifficulty;
   estimatedMinutes: number;
   spawn: SpawnRequest;
+  initialThrottle: number;
   localHour: number;
   objectives: readonly string[];
   controls: readonly string[];

@@ -12,10 +12,12 @@ describe("resolveWorldMode", () => {
     expect(usesEvaluationToken("public-token")).toBe(false);
   });
 
-  it("only enables photorealistic tiles through an explicit URL opt-in", () => {
+  it("defaults to photorealistic when enabled and keeps an explicit Cesium override", () => {
+    expect(resolveRequestedWorldMode("", true)).toBe("photorealistic");
     expect(resolveRequestedWorldMode("?world=photorealistic", true)).toBe("photorealistic");
-    expect(resolveRequestedWorldMode("?world=google", true)).toBe("cesium");
+    expect(resolveRequestedWorldMode("?world=google", true)).toBe("photorealistic");
+    expect(resolveRequestedWorldMode("?world=cesium", true)).toBe("cesium");
     expect(resolveRequestedWorldMode("?world=photorealistic", false)).toBe("cesium");
-    expect(resolveRequestedWorldMode("")).toBe("cesium");
+    expect(resolveRequestedWorldMode("?world=cesium", false)).toBe("cesium");
   });
 });
