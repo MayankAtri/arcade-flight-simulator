@@ -29,6 +29,7 @@ import { env } from "../config/env";
 import { PhotorealisticGeocodingService } from "../services/PhotorealisticGeocodingService";
 import type { GeocodingResult } from "../services/GeocodingService";
 import { BasicWorldProvider } from "../world/BasicWorldProvider";
+import { describeWorldFailure } from "../world/worldFailure";
 import { AdaptiveQualityController } from "../world/AdaptiveQualityController";
 import { CesiumWorldProvider } from "../world/CesiumWorldProvider";
 import { DaylightSystem } from "../world/DaylightSystem";
@@ -265,7 +266,7 @@ export class SimulationEngine {
           photorealisticWorld.destroy();
           return;
         }
-        fallbackReason = `Photorealistic test unavailable: ${error instanceof Error ? error.message : "unknown error"}`;
+        fallbackReason = describeWorldFailure("Google 3D scenery", error);
         photorealisticWorld.destroy();
       }
     }
@@ -285,7 +286,7 @@ export class SimulationEngine {
           cesiumWorld.destroy();
           return;
         }
-        fallbackReason = error instanceof Error ? error.message : "The Cesium world could not be loaded.";
+        fallbackReason = [fallbackReason, describeWorldFailure("Cesium terrain and buildings", error)].filter(Boolean).join(" ");
         cesiumWorld.destroy();
       }
     }

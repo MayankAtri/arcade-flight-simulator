@@ -83,6 +83,7 @@ import {
 import { cameraModeLabel, nextCameraMode } from "../systems/CameraSystem";
 import { ChallengesPanel } from "./ChallengesPanel";
 import { ControlsPanel } from "./ControlsPanel";
+import { WorldSceneryNotice } from "./WorldSceneryNotice";
 import { FlightSchoolPanel } from "./FlightSchoolPanel";
 import { AttitudeIndicator, CompassTape, formatCompassHeading } from "./HudInstruments";
 import {
@@ -778,6 +779,10 @@ function App() {
     else exitLesson();
   };
 
+  const sceneryNotice = status.fallbackReason ? (
+    <WorldSceneryNotice reason={status.fallbackReason} basic={telemetry.worldLabel === "Basic world"} onRetry={() => window.location.reload()} />
+  ) : null;
+
   const lessonTrackerOpen = lessonTrackerExpanded || Boolean(lessonRun?.completed || lessonRun?.failed);
 
   return (
@@ -799,6 +804,7 @@ function App() {
 
       {status.phase === "ready" && !showBriefing && (
         <>
+          {sceneryNotice && <div className="scenery-notice-flight">{sceneryNotice}</div>}
           <button className="controls-toggle" type="button" onClick={() => setShowControls(true)}>
             <SlidersHorizontal size={14} aria-hidden="true" /> Controls
           </button>
@@ -1073,6 +1079,7 @@ function App() {
 
           {setupView === "explore" ? (
           <div ref={setupScrollRef} className={`setup-scroll${selectedPlace ? " setup-scroll--place-selected" : ""}`}>
+            {sceneryNotice}
             <section className="setup-intro">
               <span>Explore</span>
               <h2 aria-label="Choose the world">Fly <em>anywhere</em> on Earth</h2>
@@ -1230,6 +1237,7 @@ function App() {
           </div>
           ) : setupView === "flight-school" ? (
             <div className="setup-scroll setup-scroll--flight-school">
+              {sceneryNotice}
               <FlightSchoolPanel
                 selectedLesson={selectedLesson}
                 progress={schoolProgress}
@@ -1241,6 +1249,7 @@ function App() {
             </div>
           ) : setupView === "challenges" ? (
             <div className="setup-scroll setup-scroll--challenges">
+              {sceneryNotice}
               <ChallengesPanel
                 selectedChallenge={selectedChallenge}
                 filter={challengeFilter}
@@ -1252,6 +1261,7 @@ function App() {
             </div>
           ) : (
             <div className="setup-scroll setup-scroll--ring-runs">
+              {sceneryNotice}
               <RingRunsPanel
                 selectedCourse={selectedCourse}
                 progress={ringRunProgress}

@@ -122,3 +122,11 @@ Suggested recording sequence: Dubai runway takeoff, roll, loop, exterior camera 
 ## Feature-freeze checkpoint
 
 The takeoff–flight–landing–stop and crash–respawn loops are active worldwide. Four exterior cameras, complete flight telemetry, airport/city spawning, URL reloads, Clear/Scattered/Cloudy visual weather, adaptive Cesium quality, terrain/building collision, terrain fallback, and local release verification are connected. The standard Cesium world remains the frozen default. Photorealistic tiles showed a visual improvement during evaluation but stay locked off to preserve the monthly root-tile quota and are not part of the required path. No deployment is performed by the release command.
+
+## Scenery failures and deployment checks
+
+The simulator displays a persistent scenery notice in Explore, activity menus, and flight whenever startup falls back to another provider. If all 3D providers fail, it states that only a flat map is available. Rejected access, rate limits, and network failures get separate messages without exposing service tokens. **Retry scenery** reloads the simulator at the current URL and ends the current flight; saved progress remains.
+
+Vercel runs `npm run verify:world` before building. It requires a configured public `VITE_CESIUM_ION_TOKEN` and checks asset endpoints for World Terrain (1), World Imagery (2), OSM Buildings (96188), and Google 3D Tiles (2275207). Invalid credentials, restricted asset access, or unreachable endpoints fail the build, leaving the current production deployment in place. The check uses `WORLD_CHECK_ORIGIN`, or `VERCEL_PROJECT_PRODUCTION_URL`, or the canonical production domain as the referrer.
+
+The check verifies access at build time. Later provider outages, token expiry, or individual streamed-tile failures remain possible; the notice covers provider initialization failures. Vite embeds the public token at build time, so a changed token string requires a new deployment.
